@@ -1,0 +1,39 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+
+# --- Virtual env & uv ---
+.venv/
+# note: do COMMIT uv.lock — reproducible installs are part of the story
+
+# --- Test & tool caches ---
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# --- Secrets ---
+.env
+.env.*
+*.pem
+
+# --- Harness run artifacts ---
+# Runs are outputs, not source. Baselines are the exception — they're
+# deliberately blessed reference points, so they stay in the repo.
+runs/
+reports/
+*.sqlite
+*.sqlite3
+!baselines/**
+
+# --- macOS ---
+.DS_Store
+
+# --- Editors ---
+.vscode/
+.idea/
+*.swp
