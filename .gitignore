@@ -37,3 +37,6 @@ reports/
 .vscode/
 .idea/
 *.swp
+
+# --- Claude Code (machine-specific settings only) ---
+.claude/settings.local.json
