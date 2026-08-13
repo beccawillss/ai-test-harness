@@ -91,7 +91,7 @@ class StaticTarget:
         return self._name
     
     @property
-    def capabilities(slef) -> frozenset[str]:
+    def capabilities(self) -> frozenset[str]:
         return self._capabilities
     
     def invoke(self, case: TestCase) -> TargetResponse:
@@ -111,7 +111,7 @@ CAP_TRAJECTORY = "trajectory"  # populates TargetResponse.trajectory (agents)
  
 __all__ = [
     "Target",
-    "ClosableTarget",
+    "CloseableTarget",
     "StaticTarget",
     "check_pack_compatibility",
     "CAP_CONTEXTS",
