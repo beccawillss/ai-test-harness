@@ -58,6 +58,10 @@ class TestCase(BaseModel):
     ids, success criteria — and may be absent for reference-free metrics.
     """
 
+    # Not a pytest test class, despite the name. Without this, pytest tries
+    # to collect it wherever a test module imports it.
+    __test__ = False
+
     id: str
     input: str | dict[str, Any]
     reference: str | dict[str, Any] | None = None

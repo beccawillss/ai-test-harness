@@ -1,5 +1,5 @@
 """The Target Protocol: the harness's contract with any system-under-test.
- 
+
 Why a Protocol instead of an ABC: adapters shouldn't need to import or
 inherit from the harness to satisfy the interface. Your RAG app can ship
 its own adapter class that just *happens* to match this shape, and
@@ -7,17 +7,18 @@ its own adapter class that just *happens* to match this shape, and
 That keeps the dependency arrow pointing the right way - apps depend on
 the harness only if they want to, never the reverse.
 """
- 
+
 from __future__ import annotations
- 
-from typing import Any, Protocol, runtime_checkable
- 
+
+from typing import Protocol, runtime_checkable
+
 from harness.core.models import TargetResponse, TestCase
+
 
 @runtime_checkable
 class Target(Protocol):
     """Anything the harness can evaluate.
- 
+
     Contract:
     - `name` identifies the adapter in configs, results, and reports.
       Include a version if the system-under-test is versioned
@@ -66,11 +67,12 @@ def check_pack_compatibility(
     """
     return sorted(required_capabilities - target.capabilities)
 
+
 class StaticTarget:
     """A canned response target for testing the harness itself.
 
-    Feed it {case_id: TargetResponse} and it replays them. This 
-    is the workhorse of the harness's own pytest suite: scorers, 
+    Feed it {case_id: TargetResponse} and it replays them. This
+    is the workhorse of the harness's own pytest suite: scorers,
     the runner, regression comparison, and reporting can all be
     tested offline, deterministically, and for free.
     """
@@ -89,11 +91,11 @@ class StaticTarget:
     @property
     def name(self) -> str:
         return self._name
-    
+
     @property
     def capabilities(self) -> frozenset[str]:
         return self._capabilities
-    
+
     def invoke(self, case: TestCase) -> TargetResponse:
         self.calls.append(case.id)
         try:
@@ -103,17 +105,18 @@ class StaticTarget:
                 f"StaticTarget has no canned response for case '{case.id}'"
             ) from exc
 
+
 # Capability names used by the built-in packs. Plain strings by design -
 # packs may define new ones without touching this file.
-CAP_CONTEXTS = "contexts"      # populates TargetResponse.contexts (RAG)
+CAP_CONTEXTS = "contexts"  # populates TargetResponse.contexts (RAG)
 CAP_TRAJECTORY = "trajectory"  # populates TargetResponse.trajectory (agents)
- 
- 
+
+
 __all__ = [
-    "Target",
-    "CloseableTarget",
-    "StaticTarget",
-    "check_pack_compatibility",
     "CAP_CONTEXTS",
     "CAP_TRAJECTORY",
+    "CloseableTarget",
+    "StaticTarget",
+    "Target",
+    "check_pack_compatibility",
 ]
