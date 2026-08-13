@@ -142,4 +142,4 @@ class JudgedScorer:
         return pairs
 
 
-__all__ = ["Scorer", "JudgedScorer", "MissingFieldError"]
+__all__ = ["JudgedScorer", "MissingFieldError", "Scorer"]
