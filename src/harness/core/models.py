@@ -13,7 +13,7 @@ These models are the shared vocabulary of the whole system. Design rules:
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Any
 from uuid import uuid4
@@ -22,7 +22,7 @@ from pydantic import BaseModel, Field
 
 
 def _utcnow() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 def _new_id() -> str:
@@ -34,19 +34,20 @@ class Verdict(StrEnum):
 
     PASS = "pass"
     FAIL = "fail"
-    ERROR = "error"    # target or scorer raised — an infrastructure problem,
-                       # never counted as a quality failure
+    ERROR = "error"  # target or scorer raised — an infrastructure problem,
+    # never counted as a quality failure
     SKIP = "skip"
 
 
 class ScorerKind(StrEnum):
     DETERMINISTIC = "deterministic"
-    JUDGED = "judged"          # LLM-as-judge — calibrated separately
+    JUDGED = "judged"  # LLM-as-judge — calibrated separately
 
 
 # ---------------------------------------------------------------------------
 # Inputs
 # ---------------------------------------------------------------------------
+
 
 class TestCase(BaseModel):
     """A single evaluation case, loaded from a dataset file.
@@ -60,13 +61,14 @@ class TestCase(BaseModel):
     id: str
     input: str | dict[str, Any]
     reference: str | dict[str, Any] | None = None
-    tags: list[str] = Field(default_factory=list)   # e.g. ["retrieval", "smoke"]
+    tags: list[str] = Field(default_factory=list)  # e.g. ["retrieval", "smoke"]
     extra: dict[str, Any] = Field(default_factory=dict)
 
 
 # ---------------------------------------------------------------------------
 # Target output
 # ---------------------------------------------------------------------------
+
 
 class ToolCall(BaseModel):
     """One step in an agent trajectory."""
@@ -87,8 +89,8 @@ class TargetResponse(BaseModel):
     """
 
     output: str
-    contexts: list[str] | None = None          # RAG: retrieved chunks, in rank order
-    trajectory: list[ToolCall] | None = None   # agents: full tool-call sequence
+    contexts: list[str] | None = None  # RAG: retrieved chunks, in rank order
+    trajectory: list[ToolCall] | None = None  # agents: full tool-call sequence
     latency_ms: float | None = None
     cost_usd: float | None = None
     raw: dict[str, Any] = Field(default_factory=dict)  # provider payload, for debugging
@@ -98,6 +100,7 @@ class TargetResponse(BaseModel):
 # Scoring
 # ---------------------------------------------------------------------------
 
+
 class Score(BaseModel):
     """One scorer's opinion on one attempt.
 
@@ -106,11 +109,11 @@ class Score(BaseModel):
     `value`; gates may aggregate differently.
     """
 
-    name: str                       # e.g. "context_recall@5", "faithfulness"
+    name: str  # e.g. "context_recall@5", "faithfulness"
     kind: ScorerKind
     value: float = Field(ge=0.0, le=1.0)
-    passed: bool | None = None      # None => informational metric, not gated
-    reason: str | None = None       # judge rationale or diff summary
+    passed: bool | None = None  # None => informational metric, not gated
+    reason: str | None = None  # judge rationale or diff summary
     extra: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -118,11 +121,12 @@ class Score(BaseModel):
 # Results
 # ---------------------------------------------------------------------------
 
+
 class AttemptResult(BaseModel):
     """One execution of one case. Repeats exist to measure stability."""
 
     index: int
-    response: TargetResponse | None = None     # None when the target errored
+    response: TargetResponse | None = None  # None when the target errored
     scores: list[Score] = Field(default_factory=list)
     verdict: Verdict
     error: str | None = None
@@ -138,26 +142,28 @@ class CaseResult(BaseModel):
     attempts: list[AttemptResult] = Field(default_factory=list)
 
     @property
-    def pass_rate(self) -> float:
-        """Fraction of non-error attempts that passed. The unit of truth
-        for gating — a case is not 'passing' or 'failing', it passes at
-        a rate, exactly like a flaky test in a nightly run."""
-        counted = [a for a in self.attempts if a.verdict in (Verdict.PASS, Verdict.FAIL)]
-        if not counted:
-            return 0.0
-        return sum(a.verdict is Verdict.PASS for a in counted) / len(counted)
+    def pass_rate(self) -> float | None:
+        """Fraction of judged attempts that passed, or None when no attempt
+        produced a pass/fail judgment at all. The unit of truth for gating —
+        a case is not 'passing' or 'failing', it passes at a rate, exactly
+        like a flaky test in a nightly run.
+
+        None means 'no evidence' and is categorically different from 0.0,
+        which means 'evidence, all of it bad'. A case whose every attempt
+        errored (dead judge API, broken adapter) has no quality evidence;
+        reporting it as 0.0 would be indistinguishable from a total product
+        regression, which is exactly what ADR 0001 exists to prevent."""
+        judged = [a for a in self.attempts if a.verdict in (Verdict.PASS, Verdict.FAIL)]
+        if not judged:
+            return None
+        return sum(a.verdict is Verdict.PASS for a in judged) / len(judged)
 
     @property
     def had_errors(self) -> bool:
         return any(a.verdict is Verdict.ERROR for a in self.attempts)
 
     def mean_score(self, name: str) -> float | None:
-        values = [
-            s.value
-            for a in self.attempts
-            for s in a.scores
-            if s.name == name
-        ]
+        values = [s.value for a in self.attempts for s in a.scores if s.name == name]
         return sum(values) / len(values) if values else None
 
 
@@ -170,12 +176,12 @@ class RunResult(BaseModel):
     """
 
     run_id: str = Field(default_factory=_new_id)
-    config_path: str                    # the YAML that defines this run
-    config_snapshot: dict[str, Any]     # resolved config, frozen at run time
+    config_path: str  # the YAML that defines this run
+    config_snapshot: dict[str, Any]  # resolved config, frozen at run time
     target_name: str
     pack_name: str
     dataset_path: str
-    dataset_hash: str                   # detect silent golden-set drift
+    dataset_hash: str  # detect silent golden-set drift
     model_versions: dict[str, str] = Field(default_factory=dict)
     # ^ pinned versions of every model involved: target model AND judge
     #   models. A judge upgrade can move scores with zero code changes.
@@ -184,10 +190,28 @@ class RunResult(BaseModel):
     cases: list[CaseResult] = Field(default_factory=list)
 
     @property
-    def aggregate_pass_rate(self) -> float:
-        if not self.cases:
+    def aggregate_pass_rate(self) -> float | None:
+        """Mean pass rate over the cases that were actually judged.
+
+        Cases with no pass/fail evidence are excluded rather than counted
+        as zero; None means the whole run produced no evidence. Always
+        read alongside `error_rate` — a run can be green on quality while
+        badly degraded on infrastructure."""
+        rates = [r for c in self.cases if (r := c.pass_rate) is not None]
+        if not rates:
+            return None
+        return sum(rates) / len(rates)
+
+    @property
+    def error_rate(self) -> float:
+        """Fraction of all attempts that errored.
+
+        The companion number to `aggregate_pass_rate`: errors are excluded
+        from pass rates, so this is where they must show up instead."""
+        attempts = [a for c in self.cases for a in c.attempts]
+        if not attempts:
             return 0.0
-        return sum(c.pass_rate for c in self.cases) / len(self.cases)
+        return sum(a.verdict is Verdict.ERROR for a in attempts) / len(attempts)
 
     @property
     def total_cost_usd(self) -> float:
@@ -205,5 +229,5 @@ class Baseline(BaseModel):
     baseline_id: str = Field(default_factory=_new_id)
     run_id: str
     blessed_at: datetime = Field(default_factory=_utcnow)
-    blessed_by: str | None = None       # human or CI identity — audit trail
-    note: str | None = None             # why this run became the baseline
+    blessed_by: str | None = None  # human or CI identity — audit trail
+    note: str | None = None  # why this run became the baseline
