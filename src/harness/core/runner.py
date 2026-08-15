@@ -2,13 +2,12 @@
 
 from __future__ import annotations
 
-import hashlib
-import json
 from collections import Counter
 from collections.abc import Sequence
 from datetime import UTC, datetime
 from time import perf_counter
 
+from harness.core.dataset import hash_cases
 from harness.core.models import (
     AttemptResult,
     CaseResult,
@@ -20,20 +19,6 @@ from harness.core.models import (
 )
 from harness.scorers.base import Scorer
 from harness.targets.base import CloseableTarget, Target, check_pack_compatibility
-
-
-def _hash_cases(cases: Sequence[TestCase]) -> str:
-    """Fingerprint the effective cases in their execution order."""
-    digest = hashlib.sha256()
-    for case in cases:
-        payload = json.dumps(
-            case.model_dump(mode="json"),
-            sort_keys=True,
-            separators=(",", ":"),
-        )
-        digest.update(payload.encode("utf-8"))
-        digest.update(b"\n")
-    return digest.hexdigest()
 
 
 def _duplicates(values: Sequence[str]) -> list[str]:
@@ -135,6 +120,7 @@ def run(
     cases: Sequence[TestCase],
     *,
     attempts: int = 1,
+    dataset_path: str = "<inline>",
 ) -> RunResult:
     """Run every case and scorer, returning one self-contained result."""
     selected_cases = list(cases)
@@ -176,8 +162,8 @@ def run(
         },
         target_name=target.name,
         pack_name="none",
-        dataset_path="<inline>",
-        dataset_hash=_hash_cases(selected_cases),
+        dataset_path=dataset_path,
+        dataset_hash=hash_cases(selected_cases),
         started_at=started_at,
         finished_at=datetime.now(UTC),
         cases=case_results,
