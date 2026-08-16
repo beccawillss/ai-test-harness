@@ -9,10 +9,13 @@ the harness only if they want to, never the reverse.
 """
  
 from __future__ import annotations
- 
-from typing import Any, Protocol, runtime_checkable
- 
+
+from collections.abc import Callable, Iterable
+from collections.abc import Set as AbstractSet
+from typing import Protocol, runtime_checkable
+
 from harness.core.models import TargetResponse, TestCase
+
 
 @runtime_checkable
 class Target(Protocol):
@@ -40,7 +43,7 @@ class Target(Protocol):
     def name(self) -> str: ...
 
     @property
-    def capabilities(self) -> set[str]: ...
+    def capabilities(self) -> AbstractSet[str]: ...
 
     def invoke(self, case: TestCase) -> TargetResponse: ...
 
@@ -103,6 +106,49 @@ class StaticTarget:
                 f"StaticTarget has no canned response for case '{case.id}'"
             ) from exc
 
+
+class CallableTarget:
+    """Adapt a synchronous Python callable into a harness target.
+
+    The callable receives the complete test case and must return a
+    ``TargetResponse``. This keeps application-specific invocation and response
+    construction outside the evaluation engine while making local Python
+    applications straightforward to evaluate.
+    """
+
+    def __init__(
+        self,
+        *,
+        name: str,
+        invoke: Callable[[TestCase], TargetResponse],
+        capabilities: Iterable[str] = (),
+    ) -> None:
+        if not name.strip():
+            raise ValueError("CallableTarget name must not be empty.")
+        if not callable(invoke):
+            raise TypeError("CallableTarget invoke must be callable.")
+
+        self._name = name
+        self._invoke = invoke
+        self._capabilities = frozenset(capabilities)
+
+    @property
+    def name(self) -> str:
+        return self._name
+
+    @property
+    def capabilities(self) -> frozenset[str]:
+        return self._capabilities
+
+    def invoke(self, case: TestCase) -> TargetResponse:
+        response = self._invoke(case)
+        if not isinstance(response, TargetResponse):
+            raise TypeError(
+                "CallableTarget invoke must return TargetResponse, "
+                f"got {type(response).__name__}."
+            )
+        return response
+
 # Capability names used by the built-in packs. Plain strings by design -
 # packs may define new ones without touching this file.
 CAP_CONTEXTS = "contexts"      # populates TargetResponse.contexts (RAG)
@@ -110,10 +156,11 @@ CAP_TRAJECTORY = "trajectory"  # populates TargetResponse.trajectory (agents)
  
  
 __all__ = [
-    "Target",
-    "CloseableTarget",
-    "StaticTarget",
-    "check_pack_compatibility",
     "CAP_CONTEXTS",
     "CAP_TRAJECTORY",
+    "CallableTarget",
+    "CloseableTarget",
+    "StaticTarget",
+    "Target",
+    "check_pack_compatibility",
 ]
