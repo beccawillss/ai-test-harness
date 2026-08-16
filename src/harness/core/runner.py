@@ -114,6 +114,33 @@ def _execute_attempt(
     )
 
 
+def _scorer_snapshot(scorer: Scorer) -> dict[str, object]:
+    snapshot: dict[str, object] = {
+        "name": scorer.name,
+        "kind": scorer.kind.value,
+        "requires": sorted(scorer.requires),
+    }
+    pass_threshold = getattr(scorer, "pass_threshold", None)
+    if isinstance(pass_threshold, (int, float)):
+        snapshot["pass_threshold"] = pass_threshold
+    judge_model = getattr(scorer, "judge_model", None)
+    if isinstance(judge_model, str):
+        snapshot["judge_model"] = judge_model
+    rubric = getattr(scorer, "rubric", None)
+    if isinstance(rubric, str):
+        snapshot["rubric"] = rubric
+    return snapshot
+
+
+def _model_versions(scorers: Sequence[Scorer]) -> dict[str, str]:
+    versions: dict[str, str] = {}
+    for scorer in scorers:
+        judge_model = getattr(scorer, "judge_model", None)
+        if isinstance(judge_model, str):
+            versions[f"judge:{scorer.name}"] = judge_model
+    return versions
+
+
 def run(
     target: Target,
     scorers: Sequence[Scorer],
@@ -151,19 +178,13 @@ def run(
             "attempts": attempts,
             "target": target.name,
             "target_capabilities": sorted(target.capabilities),
-            "scorers": [
-                {
-                    "name": scorer.name,
-                    "kind": scorer.kind.value,
-                    "requires": sorted(scorer.requires),
-                }
-                for scorer in selected_scorers
-            ],
+            "scorers": [_scorer_snapshot(scorer) for scorer in selected_scorers],
         },
         target_name=target.name,
         pack_name="none",
         dataset_path=dataset_path,
         dataset_hash=hash_cases(selected_cases),
+        model_versions=_model_versions(selected_scorers),
         started_at=started_at,
         finished_at=datetime.now(UTC),
         cases=case_results,
