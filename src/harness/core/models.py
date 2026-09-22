@@ -93,6 +93,8 @@ class TargetResponse(BaseModel):
     trajectory: list[ToolCall] | None = None  # agents: full tool-call sequence
     latency_ms: float | None = None
     cost_usd: float | None = None
+    structured: dict[str, Any] = Field(default_factory=dict)
+    metadata: dict[str, Any] = Field(default_factory=dict)
     raw: dict[str, Any] = Field(default_factory=dict)  # provider payload, for debugging
 
 

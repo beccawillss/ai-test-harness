@@ -88,9 +88,7 @@ def test_stored_runs_compare_end_to_end(tmp_path):
     store.save(baseline)
     store.save(candidate)
 
-    comparison = compare_runs(
-        store.load(baseline.run_id), store.load(candidate.run_id)
-    )
+    comparison = compare_runs(store.load(baseline.run_id), store.load(candidate.run_id))
 
     assert comparison.aggregate_pass_rate.baseline == 1.0
     assert comparison.aggregate_pass_rate.candidate == 0.5
@@ -160,16 +158,12 @@ def test_scores_are_compared_by_name_using_attempt_means():
             _attempt(
                 0,
                 Verdict.PASS,
-                scores=[
-                    Score(name="faithfulness", kind=ScorerKind.JUDGED, value=0.4)
-                ],
+                scores=[Score(name="faithfulness", kind=ScorerKind.JUDGED, value=0.4)],
             ),
             _attempt(
                 1,
                 Verdict.PASS,
-                scores=[
-                    Score(name="faithfulness", kind=ScorerKind.JUDGED, value=0.8)
-                ],
+                scores=[Score(name="faithfulness", kind=ScorerKind.JUDGED, value=0.8)],
             ),
         ),
     )
@@ -188,9 +182,7 @@ def test_scores_are_compared_by_name_using_attempt_means():
             _attempt(
                 1,
                 Verdict.PASS,
-                scores=[
-                    Score(name="faithfulness", kind=ScorerKind.JUDGED, value=1.0)
-                ],
+                scores=[Score(name="faithfulness", kind=ScorerKind.JUDGED, value=1.0)],
             ),
         ),
     )
@@ -240,3 +232,52 @@ def test_duplicate_case_ids_are_rejected():
 
     with pytest.raises(ValueError, match="duplicate case id 'c1'"):
         compare_runs(duplicate, candidate)
+
+
+@pytest.mark.parametrize(
+    "key,first,second",
+    [
+        ("attempts", 1, 3),
+        (
+            "scorers",
+            [{"name": "judge", "rubric": "a"}],
+            [{"name": "judge", "rubric": "b"}],
+        ),
+        (
+            "scorers",
+            [{"name": "judge", "pass_threshold": 0.7}],
+            [{"name": "judge", "pass_threshold": 0.8}],
+        ),
+        ("assertion_schema_version", "v1", "v2"),
+        ("evidence_schema_version", "v1", "v2"),
+    ],
+)
+def test_evaluation_configuration_changes_are_flagged(key, first, second):
+    baseline = _result("b")
+    candidate = _result("c")
+    baseline.config_snapshot[key] = first
+    candidate.config_snapshot[key] = second
+    assert compare_runs(baseline, candidate).evaluation_config_changed
+
+
+def test_revision_and_endpoint_are_not_evaluator_or_identity_changes():
+    baseline = _result("b", target_name="salesagent")
+    candidate = _result("c", target_name="salesagent")
+    baseline.config_snapshot["target_configuration"] = {
+        "target_revision": "abc",
+        "base_url": "http://one",
+    }
+    candidate.config_snapshot["target_configuration"] = {
+        "target_revision": "def",
+        "base_url": "http://two",
+    }
+    comparison = compare_runs(baseline, candidate)
+    assert not comparison.target_changed
+    assert not comparison.evaluation_config_changed
+
+
+def test_legacy_configuration_is_not_assumed_equivalent():
+    baseline = _result("b")
+    candidate = _result("c")
+    candidate.config_snapshot["attempts"] = 1
+    assert compare_runs(baseline, candidate).evaluation_config_changed

@@ -50,6 +50,7 @@ class RunComparison:
     target_changed: bool
     dataset_changed: bool
     model_versions_changed: bool
+    evaluation_config_changed: bool = False
 
     @property
     def regressed_case_ids(self) -> tuple[str, ...]:
@@ -95,6 +96,27 @@ def _index_cases(result: RunResult) -> dict[str, CaseResult]:
             )
         indexed[case.case_id] = case
     return indexed
+
+
+def _evaluation_config(result: RunResult) -> dict[str, object]:
+    """Compare evaluator settings, not endpoint/deployment observations.
+
+    Missing legacy keys remain missing; explicit configuration is not assumed
+    equivalent to a configuration that was never recorded.
+    """
+    keys = {
+        "attempts",
+        "scorers",
+        "target_capabilities",
+        "selection",
+        "assertion_schema_version",
+        "evidence_schema_version",
+        "semantic_evaluation",
+    }
+    return {
+        "pack_name": result.pack_name,
+        **{key: value for key, value in result.config_snapshot.items() if key in keys},
+    }
 
 
 def compare_runs(baseline: RunResult, candidate: RunResult) -> RunComparison:
@@ -163,6 +185,8 @@ def compare_runs(baseline: RunResult, candidate: RunResult) -> RunComparison:
         target_changed=baseline.target_name != candidate.target_name,
         dataset_changed=baseline.dataset_hash != candidate.dataset_hash,
         model_versions_changed=baseline.model_versions != candidate.model_versions,
+        evaluation_config_changed=_evaluation_config(baseline)
+        != _evaluation_config(candidate),
     )
 
 

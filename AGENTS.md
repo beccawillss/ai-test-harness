@@ -339,11 +339,12 @@ instructions, stop and explain the conflict before implementing.
 
 `codex-evaluation` is the integration branch.
 
-For each implementation milestone:
+For each coherent implementation slice / ExecPlan:
 
-- create a dedicated feature branch from the current integration branch;
+- default to one dedicated feature branch from the current integration branch;
+- use separate milestone branches only when the milestones are independently mergeable;
 - do not commit directly to `codex-evaluation`;
-- keep the branch scoped to one milestone or coherent vertical slice;
+- keep the branch scoped to that implementation slice / ExecPlan;
 - do not merge without explicit approval;
 - keep commits understandable and focused.
 
