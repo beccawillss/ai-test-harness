@@ -11,6 +11,41 @@ from harness.core.models import TargetResponse, TestCase
 from harness.scorers.base import JudgedScorer
 
 
+def _rubric_evidence(value: Any) -> Any:
+    """Exclude operational provenance, including nested per-turn metadata."""
+    operational = {
+        "metadata",
+        "raw",
+        "trace_id",
+        "trace_ids",
+        "session_id",
+        "latency_ms",
+        "duration_ms",
+        "token_usage",
+        "input_tokens",
+        "output_tokens",
+        "total_tokens",
+        "adapter_version",
+        "evidence_schema_version",
+        "endpoint",
+        "base_url",
+        "target_revision",
+        "target_revision_source",
+        "tool_call_id",
+        "model",
+        "prompt_version",
+        "provenance",
+        "assertions",
+    }
+    if isinstance(value, dict):
+        return {
+            k: _rubric_evidence(v) for k, v in value.items() if k not in operational
+        }
+    if isinstance(value, list):
+        return [_rubric_evidence(v) for v in value]
+    return value
+
+
 class RubricJudgeScorer(JudgedScorer):
     """Evaluate a response against a rubric using an injected model call."""
 
@@ -42,16 +77,19 @@ class RubricJudgeScorer(JudgedScorer):
     def build_prompt(self, case: TestCase, response: TargetResponse) -> str:
         evaluation_data = {
             "case": {
-                "input": case.input,
-                "reference": case.reference,
+                "input": _rubric_evidence(case.input),
+                "reference": _rubric_evidence(case.reference),
                 "tags": case.tags,
-                "metadata": case.extra,
             },
             "response": {
                 "output": response.output,
                 "contexts": response.contexts,
+                "structured": _rubric_evidence(response.structured),
                 "trajectory": (
-                    [tool_call.model_dump(mode="json") for tool_call in response.trajectory]
+                    [
+                        _rubric_evidence(tool_call.model_dump(mode="json"))
+                        for tool_call in response.trajectory
+                    ]
                     if response.trajectory is not None
                     else None
                 ),

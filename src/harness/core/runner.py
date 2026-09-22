@@ -129,6 +129,9 @@ def _scorer_snapshot(scorer: Scorer) -> dict[str, object]:
     rubric = getattr(scorer, "rubric", None)
     if isinstance(rubric, str):
         snapshot["rubric"] = rubric
+    schema_version = getattr(scorer, "schema_version", None)
+    if isinstance(schema_version, str):
+        snapshot["schema_version"] = schema_version
     return snapshot
 
 

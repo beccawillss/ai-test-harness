@@ -76,7 +76,7 @@ def test_builds_prompt_and_returns_passing_judged_score():
     assert '"reference": "Paris"' in prompt
     assert '"contexts"' in prompt
     assert '"trajectory"' in prompt
-    assert '"difficulty": "easy"' in prompt
+    assert '"difficulty"' not in prompt
 
 
 def test_score_below_threshold_is_a_quality_failure():
