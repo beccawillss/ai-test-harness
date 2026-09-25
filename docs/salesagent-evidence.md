@@ -1,4 +1,4 @@
-# Sales Agent evidence v1
+# Sales Agent evidence v2
 
 `SalesAgentTarget` calls only the V1 chat/trace HTTP routes. It imports no target
 application code. Install with `uv sync --extra salesagent`.
@@ -18,6 +18,20 @@ are decimal strings (without rounding away incorrect precision); pricing's
 
 The top-level trajectory concatenates per-turn tool calls in order. Results
 contain only normalized successful commerce data, or null for a business error.
+Successful `get_product` and `search_products` product records now retain the
+authoritative `waterproof_rating`: `none`, `water-resistant`, `moderate`, or
+`high`. The field is required; missing, null, or unsupported values are malformed
+evidence, not an inferred rating. Recommendation cards are unchanged. Extra
+product fields are still excluded; `lightweight` never implies `packable`.
+
+This addition bumps normalized evidence to `salesagent-evidence-v2` (adapter
+version `2`) and the semantic commerce-facts projection to
+`salesagent-semantic-evidence-v2`. Older persisted responses still load without
+rewriting or backfilling them, but v1 evidence cannot be rejudged with the v2
+builder when the required rating is absent. Run comparison flags either evidence
+version change as an evaluation-configuration difference, even with the same
+dataset. The datasets, rubric, and threshold have not changed.
+
 Each structured result also projects `recommendation_product_ids` from its chat
 cards. Each turn's evidence projects `grounded_product_ids` from that turn's
 successful search/get-product results. These preserve observed facts for generic

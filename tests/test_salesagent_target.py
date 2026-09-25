@@ -25,6 +25,7 @@ def product():
         "activities": ["hiking"],
         "weather": ["heavy-rain"],
         "features": ["waterproof"],
+        "waterproof_rating": "high",
         "variants": [{"colour": "Ocean Blue", "size": "M", "stock": 4}],
         "total_stock": 4,
     }
@@ -450,3 +451,37 @@ def test_missing_required_trace_error_message_is_malformed():
         [case()],
     )
     assert result.error_rate == 1
+
+
+@pytest.mark.parametrize("tool_name", ["get_product", "search_products"])
+@pytest.mark.parametrize(
+    "rating", ["missing", None, "", "extreme", True, 1, {"secret": "PRIVATE"}]
+)
+def test_missing_or_malformed_waterproof_rating_is_safe_adapter_error(
+    tool_name, rating
+):
+    def mutate(request, payload):
+        if request.method == "GET":
+            call = payload["tool_calls"][0]
+            data = call["result"]["data"]
+            if rating == "missing":
+                del data["waterproof_rating"]
+            else:
+                data["waterproof_rating"] = rating
+            call["tool_name"] = call["result"]["tool_name"] = tool_name
+            if tool_name == "search_products":
+                call["arguments"] = {}
+                call["result"]["data"] = {"products": [data], "count": 1}
+
+    result = run(
+        SalesAgentTarget(
+            "http://local", transport=httpx.MockTransport(FakeHTTP(mutate))
+        ),
+        [judge()],
+        [case(turns=["Recommend JKT-001"])],
+    )
+    attempt = result.cases[0].attempts[0]
+    assert attempt.verdict is Verdict.ERROR
+    assert attempt.response is None and attempt.scores == []
+    assert "malformed contract evidence" in attempt.error
+    assert "PRIVATE" not in result.model_dump_json()

@@ -12,6 +12,9 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+judge-openai = [
+    "httpx>=0.28,<1",
+]
 salesagent = [
     "httpx>=0.28,<1",
 ]
