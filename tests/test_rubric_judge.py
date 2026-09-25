@@ -238,3 +238,96 @@ def test_multiple_attempts_call_judge_each_time():
     assert calls == 3
     assert len(result.cases[0].attempts) == 3
     assert result.cases[0].pass_rate == 1.0
+
+
+@pytest.mark.parametrize(
+    "raw",
+    [
+        None,
+        1,
+        {},
+        "null",
+        '"text"',
+        '{"score":NaN,"reason":"x"}',
+        '{"score":Infinity,"reason":"x"}',
+        '{"score":-0.1,"reason":"x"}',
+        '{"score":"0.8","reason":"x"}',
+        '{"score":null,"reason":"x"}',
+        '{"score":0.8,"reason":null}',
+        '{"score":0.8,"reason":"x","raw":"SECRET"}',
+        '{"score":0.1,"score":1,"reason":"x"}',
+        '{"score":1,"reason":"bad","reason":"good"}',
+    ],
+)
+def test_strict_judgment_failure_is_error_without_raw_leakage(raw):
+    result = run(
+        StaticTarget({"c1": TargetResponse(output="Paris")}),
+        [_scorer(lambda _: raw)],
+        [_case()],
+    )
+    attempt = result.cases[0].attempts[0]
+    assert attempt.verdict is Verdict.ERROR
+    assert attempt.scores == []
+    assert "SECRET" not in result.model_dump_json()
+
+
+def test_evidence_builder_replaces_all_default_fields():
+    scorer = _scorer(
+        lambda _: '{"score":0.4,"reason":"Omits the requested next step."}',
+        evidence_builder=lambda case, response: {"allowed": response.output},
+    )
+    response = TargetResponse(
+        output="answer", contexts=["SECRET"], structured={"unknown": "SECRET"}
+    )
+    prompt = scorer.build_prompt(_case(), response)
+    assert '"allowed": "answer"' in prompt
+    assert all(
+        v not in prompt for v in ("SECRET", "geography", "Paris", '"trajectory"')
+    )
+    assert scorer.score(_case(), response).reason == "Omits the requested next step."
+
+
+def test_normalized_reply_observations_are_per_score_and_optional():
+    from harness.judges.base import JudgeReply
+
+    replies = iter(
+        [
+            JudgeReply(
+                text='{"score":1,"reason":"Clear."}',
+                observed_model="snapshot",
+                input_tokens=4,
+                latency_ms=2.0,
+            ),
+            JudgeReply(text='{"score":0.4,"reason":"Does not answer the question."}'),
+        ]
+    )
+    scorer = _scorer(lambda _: next(replies))
+    first = scorer.score(_case(), TargetResponse(output="a"))
+    second = scorer.score(_case(), TargetResponse(output="b"))
+    assert first.extra["judge"] == {
+        "observed_model": "snapshot",
+        "input_tokens": 4,
+        "latency_ms": 2.0,
+    }
+    assert second.extra == {"judge_model": "judge-model-v1", "judge": {}}
+
+
+@pytest.mark.parametrize(
+    "fields",
+    [
+        {"input_tokens": True},
+        {"input_tokens": -1},
+        {"output_tokens": "1"},
+        {"latency_ms": float("nan")},
+        {"cost_usd": float("inf")},
+        {"cost_usd": -1.0},
+        {"raw": {}},
+    ],
+)
+def test_invalid_normalized_judge_telemetry_is_rejected(fields):
+    from pydantic import ValidationError
+
+    from harness.judges.base import JudgeReply
+
+    with pytest.raises(ValidationError):
+        JudgeReply(text="x", **fields)

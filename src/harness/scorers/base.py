@@ -12,9 +12,11 @@ Two-tier scoring is a core design commitment:
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Any, Protocol, runtime_checkable
 
 from harness.core.models import Score, ScorerKind, TargetResponse, TestCase
+from harness.judges.base import JudgeReply
 
 
 @runtime_checkable
@@ -80,10 +82,12 @@ class JudgedScorer:
     #: Score threshold for `passed`. Tune during calibration, then freeze.
     pass_threshold: float = 0.7
 
-    def __init__(self, judge_fn: Any, judge_model: str) -> None:
+    def __init__(
+        self, judge_fn: Callable[[str], str | JudgeReply], judge_model: str
+    ) -> None:
         """
-        judge_fn: Callable[[str], str] — takes a prompt, returns the
-            judge model's raw text. Kept as a plain callable so the
+        judge_fn: takes a prompt, returns text or a normalized JudgeReply.
+            Kept as a plain callable so the
             harness core has no dependency on any provider SDK.
         judge_model: pinned identifier, recorded into every Score and
             into RunResult.model_versions.
@@ -113,6 +117,12 @@ class JudgedScorer:
                 raise MissingFieldError(self.name, field)
 
         raw = self._judge_fn(self.build_prompt(case, response))
+        extra: dict[str, Any] = {"judge_model": self.judge_model}
+        if isinstance(raw, JudgeReply):
+            extra["judge"] = raw.model_dump(
+                mode="json", exclude={"text"}, exclude_none=True
+            )
+            raw = raw.text
         value, rationale = self.parse_judgement(raw)
         return Score(
             name=self.name,
@@ -120,7 +130,7 @@ class JudgedScorer:
             value=value,
             passed=value >= self.pass_threshold,
             reason=rationale,
-            extra={"judge_model": self.judge_model},
+            extra=extra,
         )
 
     # -- calibration hook -------------------------------------------------
@@ -142,4 +152,4 @@ class JudgedScorer:
         return pairs
 
 
-__all__ = ["Scorer", "JudgedScorer", "MissingFieldError"]
+__all__ = ["JudgedScorer", "MissingFieldError", "Scorer"]

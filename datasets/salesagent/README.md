@@ -30,3 +30,23 @@ and valid promotion cases require positive results. The off-topic case only
 checks commerce safety without a judge; tone/usefulness remain unmeasured.
 See `docs/structured-assertions.md` for the assertion language and the ExecPlan
 for the full case intent table.
+
+## Separate semantic-v1 dataset
+
+`semantic.jsonl` covers the same 14 stable scenario IDs and 18 shopper turns.
+It copies inputs and deterministic assertion lists unchanged from the frozen
+`baseline.jsonl`, and replaces the short semantic reference with a versioned
+`semantic.expectations` list. Generic rubric criteria live in the semantic pack;
+the JSONL contains case-specific expectations. Extra provenance retains fixture
+hashes and records the source baseline canonical hash and harness revision.
+
+Canonical semantic hash:
+`33654c3f4870efc67edd8e30a6ae0a82c17eb58c8c30cb323add5d0efe414849`.
+Source baseline canonical hash:
+`c1a73ef207f2cabe3292d743504f7249f4729825d785adff5b6bf14ad6a7b12b`.
+The baseline bytes and assertions remain frozen. Semantic data and expectations
+are independently versioned; neither is reconstructed from observed target
+behavior. Run this dataset only through an explicitly chosen semantic profile.
+See `docs/salesagent-semantic.md` for manual opt-in, credentials, error semantics,
+and compatibility requirements. Structured-only and semantic aggregates are
+not interchangeable regression measurements.

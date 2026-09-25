@@ -8,6 +8,7 @@ from collections.abc import Callable
 from typing import Any
 
 from harness.core.models import TargetResponse, TestCase
+from harness.judges.base import JudgeReply
 from harness.scorers.base import JudgedScorer
 
 
@@ -51,13 +52,15 @@ class RubricJudgeScorer(JudgedScorer):
 
     def __init__(
         self,
-        judge_fn: Callable[[str], str],
+        judge_fn: Callable[[str], str | JudgeReply],
         judge_model: str,
         *,
         rubric: str,
         name: str = "rubric_judge",
         pass_threshold: float = 0.7,
         requires: frozenset[str] = frozenset(),
+        evidence_builder: Callable[[TestCase, TargetResponse], dict[str, Any]]
+        | None = None,
     ) -> None:
         if not name.strip():
             raise ValueError("Rubric judge name must not be empty.")
@@ -73,28 +76,33 @@ class RubricJudgeScorer(JudgedScorer):
         self.rubric = rubric
         self.pass_threshold = pass_threshold
         self.requires = frozenset(requires)
+        self.evidence_builder = evidence_builder
 
     def build_prompt(self, case: TestCase, response: TargetResponse) -> str:
-        evaluation_data = {
-            "case": {
-                "input": _rubric_evidence(case.input),
-                "reference": _rubric_evidence(case.reference),
-                "tags": case.tags,
-            },
-            "response": {
-                "output": response.output,
-                "contexts": response.contexts,
-                "structured": _rubric_evidence(response.structured),
-                "trajectory": (
-                    [
-                        _rubric_evidence(tool_call.model_dump(mode="json"))
-                        for tool_call in response.trajectory
-                    ]
-                    if response.trajectory is not None
-                    else None
-                ),
-            },
-        }
+        evaluation_data = (
+            self.evidence_builder(case, response)
+            if self.evidence_builder
+            else {
+                "case": {
+                    "input": _rubric_evidence(case.input),
+                    "reference": _rubric_evidence(case.reference),
+                    "tags": case.tags,
+                },
+                "response": {
+                    "output": response.output,
+                    "contexts": response.contexts,
+                    "structured": _rubric_evidence(response.structured),
+                    "trajectory": (
+                        [
+                            _rubric_evidence(tool_call.model_dump(mode="json"))
+                            for tool_call in response.trajectory
+                        ]
+                        if response.trajectory is not None
+                        else None
+                    ),
+                },
+            }
+        )
         payload = json.dumps(
             evaluation_data,
             ensure_ascii=False,
@@ -112,8 +120,19 @@ class RubricJudgeScorer(JudgedScorer):
         )
 
     def parse_judgement(self, raw: str) -> tuple[float, str]:
+        if not isinstance(raw, str):
+            raise ValueError("Judge output must be text.")  # noqa: TRY004 - invalid judge value
+
+        def unique_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+            result: dict[str, Any] = {}
+            for key, value in pairs:
+                if key in result:
+                    raise ValueError("Judge output contains duplicate keys.")
+                result[key] = value
+            return result
+
         try:
-            parsed: Any = json.loads(raw)
+            parsed: Any = json.loads(raw, object_pairs_hook=unique_keys)
         except json.JSONDecodeError as exc:
             raise ValueError("Judge output was not valid JSON.") from exc
 
@@ -127,13 +146,20 @@ class RubricJudgeScorer(JudgedScorer):
             raise ValueError(  # noqa: TRY004 - malformed judge output is a value error
                 "Judge output 'score' must be a number."
             )
-        score = float(raw_score)
+        try:
+            score = float(raw_score)
+        except OverflowError:
+            raise ValueError(
+                "Judge output 'score' must be between 0.0 and 1.0."
+            ) from None
         if not math.isfinite(score) or not 0.0 <= score <= 1.0:
             raise ValueError("Judge output 'score' must be between 0.0 and 1.0.")
 
         reason = parsed.get("reason")
         if not isinstance(reason, str) or not reason.strip():
             raise ValueError("Judge output 'reason' must be a non-empty string.")
+        if set(parsed) != {"score", "reason"}:
+            raise ValueError("Judge output must contain only score and reason.")
         return score, reason.strip()
 
 
