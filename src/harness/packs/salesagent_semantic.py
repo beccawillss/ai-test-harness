@@ -15,13 +15,18 @@ from harness.core.models import TargetResponse, TestCase
 from harness.judges.base import JudgeReply
 from harness.scorers.rubric_judge import RubricJudgeScorer
 from harness.scorers.structured_assertions import validate_assertions
-from harness.targets._salesagent_contract import Constraints, Money, Percentage
+from harness.targets._salesagent_contract import (
+    Constraints,
+    Money,
+    Percentage,
+    WaterproofRating,
+)
 from harness.targets.salesagent import validate_input
 
 PROFILE = "salesagent-semantic-v1"
 EXPECTATIONS_VERSION = "salesagent-semantic-expectations-v1"
 RUBRIC_VERSION = "salesagent-shopper-quality-v1"
-PROJECTION_VERSION = "salesagent-semantic-evidence-v1"
+PROJECTION_VERSION = "salesagent-semantic-evidence-v2"
 PROMPT_VERSION = "rubric-untrusted-json-v1"
 JUDGMENT_VERSION = "score-reason-v1"
 SCORER_NAME = "salesagent_semantic_quality"
@@ -122,6 +127,7 @@ class _Product(_Record):
     activities: list[str]
     weather: list[str]
     features: list[str]
+    waterproof_rating: WaterproofRating
     variants: list[_Variant]
     total_stock: int = Field(ge=0)
 

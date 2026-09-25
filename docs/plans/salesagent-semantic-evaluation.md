@@ -164,7 +164,7 @@ arbitrary dictionary and remove a few unwanted keys afterward.
 | `shopper`, `assistant` | Pair `case.input.turns[i]` with `response.structured.turns[i].output`; validate count/order and input correlation. Include all turns exactly once, including earlier assistant replies. Validate final output correlation; do not append duplicate final prose. |
 | `displayed_commerce` | Per-turn `structured`: recommendations containing product_id, name, price, currency, availability, and matched_variant colour/size/stock; promotion code/valid/discount_percent/reason; pricing product_id/original_price/final_price/currency/discount_code/discount_percent. Exclude product URLs because v1 does not judge links. |
 | `resolved_constraints` | Per-turn `evidence.resolved_constraints`: category, activity, weather, features, maximum_price, colour, size, season, priority. Successive snapshots and conversation suffice; no constraint-change telemetry is necessary. |
-| `commerce_facts.products` | Explicitly project successful normalized per-turn `get_product` and `search_products` results into product_id/name/price/currency/category/activities/weather/features and relevant variant colour/size/stock, plus total_stock. Retain only products identified by ID/name in shopper turns up to this turn, or in current/earlier displayed recommendations; no whole search payload, arguments, URLs, or tool names. |
+| `commerce_facts.products` | Explicitly project successful normalized per-turn `get_product` and `search_products` results into product_id/name/price/currency/category/activities/weather/features/waterproof_rating and relevant variant colour/size/stock, plus total_stock. Retain only products identified by ID/name in shopper turns up to this turn, or in current/earlier displayed recommendations; no whole search payload, arguments, URLs, or tool names. |
 | `commerce_facts.inventory` | From normalized `check_inventory` result: product_id/colour/size/stock/available/status for the requested/displayed product. Needed when unavailable products produce no cards. |
 | `commerce_facts.promotions` | From normalized successful `validate_discount`: code/valid/discount_percent/reason for the requested/displayed code. This supports inactive/unknown explanations without sending tool envelopes. |
 
@@ -721,3 +721,114 @@ and call budget remain operator prerequisites. No live semantic quality,
 injection robustness, judge calibration, or live provider compatibility is
 claimed from these offline results. No historical run was changed, no baseline
 was promoted, and the branch was not merged.
+
+## Follow-up: authoritative waterproof-rating evidence
+
+The user completed investigation of persisted semantic run `c929629bc0a0` and
+authorized only this harness evidence fix. The recommendation judge lacked
+support for “high waterproof rating” although JKT-001's authoritative catalogue
+and product-tool contract supply `waterproof_rating="high"`. The harness's
+normalized Product schema discarded that field before the semantic allowlist.
+Packability is a separate unsupported claim; it is not added or inferred from
+`lightweight`. The promotion-case scores, rubric, and threshold are out of scope.
+
+- [x] Add required, strictly enumerated `waterproof_rating` to normalized
+  successful get/search product evidence and the semantic product allowlist.
+- [x] Bump normalized evidence to `salesagent-evidence-v2`, adapter to `2`, and
+  semantic builder to `salesagent-semantic-evidence-v2`.
+- [x] Add offline coverage for every supported rating through both tool paths,
+  missing/malformed ratings, nested unknown-field exclusion, no synthesized
+  packability, and persisted old/new configuration comparison.
+- [x] Complete the semantic ExecPlan's offline validation matrix and frozen-file
+  checks; actual results are recorded below.
+
+The field uses the target domain's four values: `none`, `water-resistant`,
+`moderate`, and `high`. Missing/malformed values are ERROR rather than a guessed
+rating. No recommendation-card fields, whole tool/product payloads, or new
+metadata are exposed. Existing untrusted-text handling remains unchanged.
+Older run documents remain loadable without modification; rejudging old evidence
+that lacks this field with the v2 builder correctly errors instead of silently
+claiming complete evidence. Either version change independently flags
+`evaluation_config_changed`; semantic summaries mark those runs incompatible.
+
+This is the same approved semantic-evaluation slice on `feat/semantic-evaluation`.
+Both datasets remain frozen; no target repository change, live call, stored-run
+rewrite, or merge is authorized. Historical implementation/acceptance records
+above describe the v1 artifact and are retained as history.
+
+Implementation result: only the two product schemas, evidence/adapter version
+constants, their tests, this plan, and `docs/salesagent-evidence.md` changed.
+Specifically: `src/harness/targets/_salesagent_contract.py`,
+`src/harness/targets/salesagent.py`, `src/harness/packs/salesagent_semantic.py`,
+`tests/test_salesagent_target.py`, and `tests/test_salesagent_semantic.py`.
+No generic scorer, runner, comparison implementation, rubric, threshold,
+dependency, dataset, or target repository changes were needed.
+
+Added 32 parametrized cases: eight supported-rating/tool-path combinations,
+fourteen adapter rejection cases, seven semantic-builder rejection cases, and
+three independently versioned persistence/comparison cases. The supported-value
+tests verify exact product allowlist keys, unknown-field exclusion at both
+normalization boundaries, preserved lightweight features without synthesized
+packability, and actual judge-prompt inclusion of the rating. Existing hostile
+text, credential, metadata, and evaluator-isolation tests also pass.
+
+| Follow-up validation | Result |
+| --- | --- |
+| Complete offline `pytest -v` | **349 passed**. |
+| ExecPlan's focused six-module pytest command | **231 passed**. |
+| `ruff check .` | **Passed**. |
+| `ruff format --check .` | Only the same three pre-existing failures in untouched `src/harness/targets/base.py`, `tests/test_callable_target.py`, and `tests/test_dataset.py`; 51 files already formatted. |
+| Scoped format check | **Passed**, all five changed Python files. |
+| `mypy src/ examples/` | **Passed**, 25 source files. |
+| Dataset Git diff and fingerprint checks | **Passed**, both files byte-for-byte unchanged; canonical and byte hashes still match the table above. |
+| Final `git diff --check` | **Passed**. |
+
+All Python validation used the frozen offline uv environment with the
+`salesagent` and `judge-openai` extras. Tests used only local deterministic fakes
+and MockTransport under the existing network blocker. Existing stored runs were
+not opened or rewritten; persistence tests used temporary databases. The Sales
+Agent repository remains clean. No live target/judge call or merge occurred.
+The v2 evidence path is ready for a separately authorized new live run; this
+fix does not alter or retroactively rescore `c929629bc0a0`.
+
+## Live candidate results (2026-09-25)
+
+The following completed runs were supplied by the user. These later observations
+update the live-run status recorded above; earlier implementation records remain
+historical.
+
+| Run | Run ID | Result |
+| --- | --- | --- |
+| Targeted candidate diagnostic | `71724f5ec996` | **4/4 PASS**. |
+| Deterministic regression | `6e6daa089427` | **14/14 PASS, 0 ERROR**. |
+| Full semantic-v2 candidate | `bbeb64511171` | **14/14 PASS, 0 ERROR**. |
+
+The existing `compare_runs` and semantic `comparison_summary` compared persisted
+pre-fix `6c7f864209bd` with candidate `bbeb64511171` in
+`runs/salesagent-semantic.sqlite`, opened read-only. The comparison returned
+`semantic_compatible=true` and `compatible_semantic_observations`: dataset,
+evaluator configuration, target identity, and model versions were unchanged.
+Both runs use `salesagent-evidence-v2` and `salesagent-semantic-evidence-v2`;
+the stored profile remains named `salesagent-semantic-v1`.
+
+Pass rate improved **12/14 → 14/14 (85.71% → 100%)**.
+`sales-welcome10` and `sales-previous-product` changed FAIL → PASS, each improving
+its semantic score **0.6 → 1.0**. `sales-discount-override` remained PASS while
+improving **0.8 → 1.0**. The other 11 cases retained PASS and semantic scores of
+1.0. Mean semantic score increased **0.9286 → 1.0**. Judge explanations identify
+clear communication of the valid 10% discount and £130.50 quote as the improvement.
+There were no regressions, added/removed cases, or gained/lost quality evidence.
+Both runs passed all **148 deterministic assertions, including 115 critical
+assertions**, with **0 infrastructure errors**.
+
+Recorded target revision changed from
+`c6acfe2dbccc7d518243ff7756950c2908bbd1c8` to
+`65873979dbb90c9e9920da1deb199be876a31a86`, and observed target prompt changed
+`phase7-v2` → `phase7-v3`. Target model `gpt-5.6-terra`, judge `gpt-6-sol`, and
+semantic threshold 0.7 were unchanged. These are full-dataset, single-attempt
+observations under a provisionally uncalibrated judge; they do not isolate code,
+prompt, or sampling effects or establish repeated-run stability.
+
+Recording these results made no live calls and did not modify stored runs or
+code, promote a baseline, or merge a branch. The read-only comparison verified
+that the database SHA-256 remained unchanged.

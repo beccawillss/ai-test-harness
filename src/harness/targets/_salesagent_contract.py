@@ -39,6 +39,7 @@ Money = Annotated[
 Percentage = Annotated[Money, Field(le=100)]
 Nonempty = Annotated[str, Field(min_length=1, pattern=r"\S")]
 Count = Annotated[int, Field(ge=0)]
+WaterproofRating = Literal["none", "water-resistant", "moderate", "high"]
 
 
 class Contract(BaseModel):
@@ -191,6 +192,7 @@ class Product(Contract):
     activities: list[str]
     weather: list[str]
     features: list[str]
+    waterproof_rating: WaterproofRating
     variants: list[Variant]
     total_stock: Count
 

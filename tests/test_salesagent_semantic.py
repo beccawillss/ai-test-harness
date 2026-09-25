@@ -834,3 +834,139 @@ def test_late_turn_failure_is_never_partially_judged(recipe):
     assert attempt.verdict is Verdict.ERROR and attempt.response is None
     assert attempt.scores == [] and result.aggregate_pass_rate is None
     assert result.error_rate == 1
+
+
+@pytest.mark.parametrize("tool_name", ["get_product", "search_products"])
+@pytest.mark.parametrize("rating", ["none", "water-resistant", "moderate", "high"])
+def test_authoritative_waterproof_rating_reaches_judge_through_both_allowlists(
+    tool_name, rating
+):
+    def mutate(request, payload):
+        if request.method == "GET":
+            call = payload["tool_calls"][0]
+            data = call["result"]["data"]
+            data.update(
+                waterproof_rating=rating,
+                features=["waterproof", "lightweight"],
+                packable=True,
+                unknown={"secret": "PRIVATE_PRODUCT"},
+            )
+            call["tool_name"] = call["result"]["tool_name"] = tool_name
+            if tool_name == "search_products":
+                call["arguments"] = {}
+                call["result"]["data"] = {"products": [data], "count": 1}
+
+    case = simple_case()
+    target = SalesAgentTarget(
+        "http://fake", transport=httpx.MockTransport(FakeHTTP(mutate))
+    )
+    try:
+        response = target.invoke(case)
+    finally:
+        target.close()
+    normalized = response.trajectory[0].result
+    source = normalized["products"][0] if tool_name == "search_products" else normalized
+    assert source["waterproof_rating"] == rating
+    assert "packable" not in source and "unknown" not in source
+    assert response.metadata["evidence_schema_version"] == "salesagent-evidence-v2"
+    assert "PRIVATE_PRODUCT" not in response.model_dump_json()
+    # Independently exercise the semantic allowlist on normalized evidence too.
+    turn_result = response.structured["turns"][0]["trajectory"][0]["result"]
+    turn_product = (
+        turn_result["products"][0] if tool_name == "search_products" else turn_result
+    )
+    turn_product.update(packable=True, unknown={"secret": "PRIVATE_PROJECTION"})
+    prompts = []
+    pack.make_scorer(
+        lambda p: prompts.append(p) or '{"score":1,"reason":"Supported."}', "fake"
+    ).score(case, response)
+    payload = pack.build_evidence(case, response)
+    projected = payload["turns"][0]["commerce_facts"]["products"][0]
+    assert set(projected) == {
+        "product_id",
+        "name",
+        "price",
+        "currency",
+        "category",
+        "activities",
+        "weather",
+        "features",
+        "waterproof_rating",
+        "variants",
+        "total_stock",
+    }
+    assert projected["waterproof_rating"] == rating
+    assert projected["features"] == ["waterproof", "lightweight"]
+    assert f'"waterproof_rating": "{rating}"' in prompts[0]
+    assert all(
+        value not in prompts[0]
+        for value in (
+            "PRIVATE_",
+            "packable",
+            "packability",
+            '"assertions"',
+            '"metadata"',
+            '"trajectory"',
+        )
+    )
+
+
+@pytest.mark.parametrize(
+    "rating", ["missing", None, "", "extreme", True, 1, {"secret": "PRIVATE"}]
+)
+def test_invalid_normalized_waterproof_rating_prevents_semantic_judge_call(rating):
+    case = simple_case()
+    response = target_response(case)
+    product = response.structured["turns"][0]["trajectory"][0]["result"]
+    if rating == "missing":
+        del product["waterproof_rating"]
+    else:
+        product["waterproof_rating"] = rating
+    with pytest.raises(pack.SemanticEvidenceError, match="Missing or malformed") as exc:
+        pack.make_scorer(lambda _: pytest.fail("judge called"), "fake").score(
+            case, response
+        )
+    assert "PRIVATE" not in str(exc.value)
+
+
+@pytest.mark.parametrize("version_change", ["normalized", "projection", "both"])
+def test_v1_and_v2_evidence_runs_reload_but_are_not_comparable(
+    recipe, tmp_path, version_change
+):
+    current = fake_evaluate(recipe, case_id="sales-recommend-normal")
+    assert (
+        current.config_snapshot["evidence_schema_version"] == "salesagent-evidence-v2"
+    )
+    assert (
+        current.config_snapshot["semantic_evaluation"]["projection_version"]
+        == "salesagent-semantic-evidence-v2"
+    )
+    old = current.model_copy(deep=True)
+    old.run_id = "old-evidence"
+    if version_change in {"normalized", "both"}:
+        old.config_snapshot["evidence_schema_version"] = "salesagent-evidence-v1"
+        old.config_snapshot["target_configuration"]["evidence_schema_version"] = (
+            "salesagent-evidence-v1"
+        )
+        old.config_snapshot["target_configuration"]["adapter_version"] = "1"
+        response = old.cases[0].attempts[0].response
+        response.metadata["evidence_schema_version"] = "salesagent-evidence-v1"
+        response.metadata["adapter_version"] = "1"
+        for call in response.trajectory:
+            call.result.pop("waterproof_rating", None)
+        for turn in response.structured["turns"]:
+            for call in turn["trajectory"]:
+                call["result"].pop("waterproof_rating", None)
+    if version_change in {"projection", "both"}:
+        old.config_snapshot["semantic_evaluation"]["projection_version"] = (
+            "salesagent-semantic-evidence-v1"
+        )
+    database = tmp_path / "versions.sqlite"
+    restored_old = recipe.persist_and_verify(old, database)
+    restored_current = recipe.persist_and_verify(current, database)
+    comparison = recipe.comparison_summary(restored_old, restored_current)
+    assert old.dataset_hash == current.dataset_hash
+    assert not comparison["comparison"]["dataset_changed"]
+    assert comparison["comparison"]["evaluation_config_changed"]
+    assert not comparison["semantic_compatible"]
+    assert comparison["interpretation"] == "incompatible_or_confounded"

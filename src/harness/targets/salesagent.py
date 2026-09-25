@@ -24,8 +24,8 @@ from harness.targets._salesagent_contract import (
     Trace,
 )
 
-EVIDENCE_VERSION = "salesagent-evidence-v1"
-ADAPTER_VERSION = "1"
+EVIDENCE_VERSION = "salesagent-evidence-v2"
+ADAPTER_VERSION = "2"
 
 
 class SalesAgentError(RuntimeError):
