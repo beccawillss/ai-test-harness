@@ -173,6 +173,8 @@ def test_runner_records_judge_score_and_model_version():
             "pass_threshold": 0.7,
             "judge_model": "judge-model-v1",
             "rubric": scorer.rubric,
+            "prompt_version": "rubric-untrusted-json-v1",
+            "judgment_version": "score-reason-v1",
         }
     ]
 
@@ -331,3 +333,86 @@ def test_invalid_normalized_judge_telemetry_is_rejected(fields):
 
     with pytest.raises(ValidationError):
         JudgeReply(text="x", **fields)
+
+
+def test_prepared_and_ordinary_scores_are_identical_and_builder_runs_once():
+    import json
+
+    from harness.judges.base import JudgeReply
+
+    built, prompts = [], []
+
+    def evidence(case, response):
+        built.append(response.model_dump())
+        return {"answer": response.output, "question": case.input}
+
+    def judge(prompt):
+        prompts.append(prompt)
+        return JudgeReply(text='{"score":0.8,"reason":"Clear."}', input_tokens=8)
+
+    scorer = _scorer(judge, evidence_builder=evidence)
+    case, response = _case(), TargetResponse(output="Paris")
+    ordinary = scorer.score(case, response)
+    prepared = scorer.prepare(case, response)
+    assert json.loads(prepared.evidence_json) == {
+        "answer": "Paris",
+        "question": case.input,
+    }
+    for _ in range(3):
+        assert scorer.score_prepared(prepared) == ordinary
+    assert len(built) == 2
+    assert len(set(prompts)) == 1
+    with pytest.raises(ValueError):
+        prepared.prompt = "changed"
+    scorer.pass_threshold = 0.9
+    with pytest.raises(ValueError, match="configuration changed"):
+        scorer.score_prepared(prepared)
+    assert len(prompts) == 4
+
+
+def test_prepared_parse_failure_retains_only_safe_observation():
+    from harness.judges.base import JudgeReply, JudgeScoringError
+
+    scorer = _scorer(
+        lambda _: JudgeReply(
+            text="PRIVATE_RAW", observed_model="snapshot", input_tokens=9
+        )
+    )
+    with pytest.raises(JudgeScoringError) as caught:
+        scorer.score_prepared(scorer.prepare(_case(), TargetResponse(output="Paris")))
+    assert caught.value.observation.input_tokens == 9
+    assert "PRIVATE_RAW" not in str(caught.value)
+    assert "PRIVATE_RAW" not in caught.value.observation.model_dump_json()
+
+
+def test_non_rubric_judged_scorer_uses_prepared_path():
+    from harness.scorers.base import JudgedScorer
+
+    class PlainScorer(JudgedScorer):
+        def build_prompt(self, case, response):
+            return response.output
+
+        def parse_judgement(self, raw):
+            return float(raw), "Observed quality."
+
+    prompts = []
+    scorer = PlainScorer(lambda prompt: prompts.append(prompt) or "0.8", "fake")
+    prepared = scorer.prepare(_case(), TargetResponse(output="fixed"))
+    assert scorer.score_prepared(prepared).value == 0.8
+    assert scorer.score(_case(), TargetResponse(output="fixed")).value == 0.8
+    assert prompts == ["fixed", "fixed"]
+
+
+def test_existing_rubric_subclass_prompt_override_is_preserved():
+    class CustomRubric(RubricJudgeScorer):
+        def build_prompt(self, case, response):
+            return "custom: " + response.output
+
+    prompts = []
+    scorer = CustomRubric(
+        lambda prompt: prompts.append(prompt) or '{"score":0.8,"reason":"Clear."}',
+        "fake",
+        rubric="Useful",
+    )
+    scorer.score(_case(), TargetResponse(output="answer"))
+    assert prompts == ["custom: answer"]

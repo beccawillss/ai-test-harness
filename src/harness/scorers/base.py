@@ -15,8 +15,33 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any, Protocol, runtime_checkable
 
+from pydantic import BaseModel, ConfigDict
+
+from harness.core.fingerprints import canonical_json, text_hash
 from harness.core.models import Score, ScorerKind, TargetResponse, TestCase
-from harness.judges.base import JudgeReply
+from harness.judges.base import JudgeReply, JudgeScoringError
+
+
+class PreparedJudgeInput(BaseModel):
+    """Immutable evaluator input; its content is evaluation data, not public data."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
+
+    prompt: str
+    configuration_json: str
+    evidence_json: str | None = None
+
+    @property
+    def prompt_hash(self) -> str:
+        return text_hash(self.prompt)
+
+    @property
+    def evidence_hash(self) -> str | None:
+        return text_hash(self.evidence_json) if self.evidence_json is not None else None
+
+    @property
+    def configuration_hash(self) -> str:
+        return text_hash(self.configuration_json)
 
 
 @runtime_checkable
@@ -80,7 +105,33 @@ class JudgedScorer:
     name: str = "judged"
     requires: frozenset[str] = frozenset()
     #: Score threshold for `passed`. Tune during calibration, then freeze.
-    pass_threshold: float = 0.7
+    pass_threshold: float | None = 0.7
+    projection_version: str | None = None
+    prompt_version: str | None = None
+    judgment_version: str | None = None
+    rubric_version: str | None = None
+    projection_reviewed: bool = False
+
+    @property
+    def evidence_settings(self) -> dict[str, str | int]:
+        return {}
+
+    @property
+    def preparation_configuration(self) -> dict[str, Any]:
+        """Explicit authored configuration; never inspect a judge's attributes."""
+        return {
+            "name": self.name,
+            "kind": self.kind.value,
+            "requires": sorted(self.requires),
+            "judge_model": self.judge_model,
+            "pass_threshold": self.pass_threshold,
+            "rubric": getattr(self, "rubric", None),
+            "rubric_version": self.rubric_version,
+            "projection_version": self.projection_version,
+            "prompt_version": self.prompt_version,
+            "judgment_version": self.judgment_version,
+            "evidence_settings": self.evidence_settings,
+        }
 
     def __init__(
         self, judge_fn: Callable[[str], str | JudgeReply], judge_model: str
@@ -112,23 +163,57 @@ class JudgedScorer:
     # -- Protocol implementation -----------------------------------------
 
     def score(self, case: TestCase, response: TargetResponse) -> Score:
+        return self.score_prepared(self.prepare(case, response))
+
+    def prepare(self, case: TestCase, response: TargetResponse) -> PreparedJudgeInput:
+        self._check_fields(response)
+        return PreparedJudgeInput(
+            prompt=self.build_prompt(case, response),
+            configuration_json=canonical_json(self.preparation_configuration),
+        )
+
+    def _check_fields(self, response: TargetResponse) -> None:
         for field in self.requires:
             if getattr(response, field, None) is None:
                 raise MissingFieldError(self.name, field)
 
-        raw = self._judge_fn(self.build_prompt(case, response))
+    def score_prepared(
+        self,
+        prepared: PreparedJudgeInput,
+        *,
+        on_call: Callable[[str], None] | None = None,
+    ) -> Score:
+        """Judge fixed bytes through the ordinary parser and threshold path.
+
+        on_call observes the actual prompt immediately before invocation. It may
+        reject a request but cannot replace its content.
+        """
+        if prepared.configuration_json != canonical_json(
+            self.preparation_configuration
+        ):
+            raise ValueError("Prepared scorer configuration changed")
+        prompt = prepared.prompt
+        if on_call is not None:
+            on_call(prompt)
+        raw = self._judge_fn(prompt)
         extra: dict[str, Any] = {"judge_model": self.judge_model}
         if isinstance(raw, JudgeReply):
             extra["judge"] = raw.model_dump(
                 mode="json", exclude={"text"}, exclude_none=True
             )
-            raw = raw.text
-        value, rationale = self.parse_judgement(raw)
+            try:
+                value, rationale = self.parse_judgement(raw.text)
+            except Exception:  # noqa: BLE001 - parser failures retain safe observations only
+                raise JudgeScoringError(raw.observation) from None
+        else:
+            value, rationale = self.parse_judgement(raw)
         return Score(
             name=self.name,
             kind=ScorerKind.JUDGED,
             value=value,
-            passed=value >= self.pass_threshold,
+            passed=(value >= self.pass_threshold)
+            if self.pass_threshold is not None
+            else None,
             reason=rationale,
             extra=extra,
         )
@@ -152,4 +237,4 @@ class JudgedScorer:
         return pairs
 
 
-__all__ = ["JudgedScorer", "MissingFieldError", "Scorer"]
+__all__ = ["JudgedScorer", "MissingFieldError", "PreparedJudgeInput", "Scorer"]

@@ -77,14 +77,44 @@ class OpenAIJudge:
 
     @property
     def configuration(self) -> dict[str, Any]:
+        timeouts = self.timeout.as_dict()
+        if any(value is None for value in timeouts.values()):
+            raise ValueError("Judge timeouts must remain bounded")
+        return self.configuration_for(
+            model=self.model,
+            max_output_tokens=self.max_output_tokens,
+            **{
+                f"{key}_timeout": value
+                for key, value in timeouts.items()
+                if value is not None
+            },
+        )
+
+    @staticmethod
+    def configuration_for(
+        *,
+        model: str,
+        max_output_tokens: int = 2048,
+        connect_timeout: float = 5,
+        read_timeout: float = 120,
+        write_timeout: float = 10,
+        pool_timeout: float = 5,
+    ) -> dict[str, Any]:
+        """Describe and validate settings without credentials or client creation."""
+        OpenAIJudge.validate_configuration(api_key="configuration-only", model=model)
+        if type(max_output_tokens) is not int or max_output_tokens < 1:
+            raise ValueError("Judge output token limit must be a positive integer")
+        values = (connect_timeout, read_timeout, write_timeout, pool_timeout)
+        if any(isinstance(v, bool) or not math.isfinite(v) or v <= 0 for v in values):
+            raise ValueError("Judge timeouts must be positive finite seconds")
         return {
             "provider": "openai",
-            "model": self.model,
+            "model": model,
             "adapter_version": ADAPTER_VERSION,
             "endpoint": ENDPOINT,
             "instruction_version": INSTRUCTION_VERSION,
-            "max_output_tokens": self.max_output_tokens,
-            "timeouts": self.timeout.as_dict(),
+            "max_output_tokens": max_output_tokens,
+            "timeouts": dict(zip(("connect", "read", "write", "pool"), values)),
             "retries": 0,
             "store": False,
             "stream": False,
