@@ -132,6 +132,18 @@ def _scorer_snapshot(scorer: Scorer) -> dict[str, object]:
     schema_version = getattr(scorer, "schema_version", None)
     if isinstance(schema_version, str):
         snapshot["schema_version"] = schema_version
+    for key in (
+        "projection_version",
+        "prompt_version",
+        "judgment_version",
+        "rubric_version",
+    ):
+        value = getattr(scorer, key, None)
+        if isinstance(value, str):
+            snapshot[key] = value
+    evidence_settings = getattr(scorer, "evidence_settings", None)
+    if evidence_settings:
+        snapshot["evidence_settings"] = evidence_settings
     return snapshot
 
 

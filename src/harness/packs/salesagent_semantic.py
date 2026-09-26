@@ -324,6 +324,14 @@ def make_scorer(
         pass_threshold=0.7,
         requires=frozenset({"structured"}),
         evidence_builder=build_evidence,
+        projection_version=PROJECTION_VERSION,
+        rubric_version=RUBRIC_VERSION,
+        projection_reviewed=True,
+        evidence_settings={
+            "expectations_version": EXPECTATIONS_VERSION,
+            "payload_limit_bytes": PAYLOAD_LIMIT,
+            "scope": "whole_conversation",
+        },
     )
 
 
