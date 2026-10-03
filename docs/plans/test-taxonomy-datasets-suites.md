@@ -4,8 +4,9 @@ This ExecPlan was created on 2026-10-02 and is **approved with the four
 amendments incorporated on 2026-10-03**: strict v2 whitespace/direct validation,
 explicit suite fingerprint types, explicit case payload persistence policy,
 and deferred cross-study ID reuse decisions. Subsequent requests authorized
-Milestones 1–4 individually; **all four are completed and validated below**.
-Milestone 5 remains unstarted; do not begin it without explicit approval.
+Milestones 1–5 individually; **all five are completed and validated below**.
+Milestone 5 is documentation/integration-contract preparation only. The 50-case
+coverage matrix still requires approval, and case authoring remains unstarted.
 Frozen datasets, stored runs, replay artifacts, and calibration artifacts are
 unchanged. No live targets or judges were invoked.
 
@@ -17,6 +18,8 @@ Milestone 3 starting HEAD: `3352ea57849865bd2d87f0e318bb5f6ff9b80086`
 (committed Milestone 2; clean worktree verified before Milestone 3).
 Milestone 4 starting HEAD: `262b27ba6917d1ac6631c75ae1e8b3adeeddedd3`
 (committed Milestone 3; clean worktree verified before Milestone 4).
+Milestone 5 starting HEAD: `673df46ada3b43493411f99dd7aff6b72847b8ae`
+(committed Milestone 4; clean worktree verified before Milestone 5).
 The worktree was clean before this document was added. Continue this coherent
 slice on the existing feature branch; do not merge, rebase, delete branches,
 or rewrite history. Check for intervening repository changes before starting
@@ -81,7 +84,8 @@ coverage-matrix approval and completed, validated generic Milestones 1–4.
   (2026-10-03; explicit Milestone 3 implementation authorization).
 - [x] Milestone 4: grouped reporting and comparison context
   (2026-10-03; explicit Milestone 4 implementation authorization).
-- [ ] Milestone 5: study layout and adoption documentation only.
+- [x] Milestone 5: study layout and adoption documentation only
+  (2026-10-03; explicit documentation-only Milestone 5 authorization).
 - [x] Complete generic Milestones 1–4 offline acceptance and record results/deviations.
 - [ ] Separate future approval: 50-case coverage matrix and case authoring.
 
@@ -1655,8 +1659,86 @@ Hashes-only reporting works without source cases but cannot supply absent input/
 reference evidence. Group summaries are descriptive, without risk weighting,
 statistical claims or regression gates.
 
-**Milestone 4 is complete. Stop before Milestone 5 until explicitly approved.**
+**Milestone 4 completion checkpoint (subsequently approved for Milestone 5).**
 Milestones 1–4 generic offline acceptance is complete. Sales Agent adoption,
 50-case study authoring, vocabulary, UI, latest-status service, charts and
 calibration reporting changes remain unstarted. No commits, staging, merges or
 history changes were performed during Milestone 4.
+
+## Milestone 5 adoption-preparation record — 2026-10-03
+
+Explicit authorization covered documentation and integration-contract preparation
+only. Re-read AGENTS.md and the completed amended ExecPlan. Confirmed Milestone 4
+committed at `673df46ada3b43493411f99dd7aff6b72847b8ae` on
+`feat/test-taxonomy-suites`, with a clean worktree. Its 13-file, +1,915/-22 diff
+matches the approved Milestone 4 result; no intervening changes were present.
+Before editing, rechecked the 23 protected files against the Milestone 4 inventory
+and both frozen datasets' exact legacy hashes.
+
+### Delivered documentation
+
+Only the three approved documentation files changed:
+
+- `datasets/salesagent/README.md` explicitly distinguishes historical frozen
+  14-case studies from the planned study, documents the future file layout and
+  links the adoption contract.
+- `docs/salesagent-study-adoption.md` specifies the new dataset identity/version,
+  strict descriptor-aware v2 loading, distinct descriptor/full/subset hashes,
+  generic suite binding, integration-owned reference validation and profile
+  factories, metadata allowlists and explicit payload policy. It records target
+  and judge evidence isolation, frozen-study compatibility and future mocked
+  adoption acceptance requirements.
+- This plan records Milestone 5 completion and the remaining authoring boundary.
+
+The contract reflects the implemented `EvaluationProfile`/`execute_suite` APIs;
+no factory or importable example was added or changed. One uniform scorer list
+applies to a run. Taxonomy remains study-owned and cannot select scorer classes
+or application behavior in core. Profiles may explicitly require full payloads
+for replay; full persistence does not eliminate all verified-source requirements.
+The legacy judge builder's tag inclusion remains explicit and unchanged.
+
+IDs must be unique within the dataset and stable once published. Cross-study
+reuse must be intentional and semantically justified; wording or matching IDs
+do not infer equivalence. No existing scenario or ID was selected for reuse.
+Possible suite purposes are illustrative only; names, membership, filters and
+risk/category/tag vocabulary remain undecided.
+
+### Validation and compatibility
+
+No repository Markdown linter or documentation build command is configured.
+A read-only local documentation check verified balanced fenced blocks in all
+three changed documents and all six local Markdown links. Reviewed the contract
+against existing suite/profile, Sales Agent adapter and semantic-pack APIs.
+
+```sh
+.venv/bin/ruff check src tests examples
+.venv/bin/mypy src
+git diff --check
+```
+
+Results: Ruff passed; mypy passed for **33 source files**; diff whitespace check
+passed. Full pytest was not rerun: this change touches only Markdown, with no
+importable examples, executable contracts, source or tests changed. Milestone
+4's full **1,101-passing** offline suite remains the code baseline, not a new
+Milestone 5 test run.
+
+Read-only checks reconfirmed both datasets still contain 14 cases and their byte
+SHA-256 and v1 case hashes exactly match the frozen protection table. All **23**
+inventoried dataset/artifact/fixture files retain their prior byte hashes.
+Frozen loaders, expected hash constants, run/replay/calibration artifacts and
+human bindings are unchanged. The proposed `datasets/salesagent/study-v1/`
+directory does not exist. No live targets or judges were invoked.
+
+### Outstanding decisions and stop point
+
+**Design and approve the Sales Agent Evaluation Study v1 coverage matrix before
+authoring cases.** That exercise still owns the 50-case distribution, primary
+categories, cross-cutting tags, risk assignments, single/multi-turn balance,
+normal/edge/adversarial balance, deterministic/semantic expectations, holdout
+strategy, deliberate reuse (if any), and suite membership/profile choices.
+No coverage decision or case authoring was performed in this milestone.
+
+No deviations from the approved scope. All five planned milestones are complete,
+with Milestone 5 limited to preparation documentation. No further feature,
+50-case dataset, integration entry point, scorer, rubric, UI or live evaluation
+was started. No commits, staging, merges or history changes were performed.
