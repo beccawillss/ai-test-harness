@@ -3,8 +3,8 @@
 Status: accepted for the taxonomy ExecPlan; fingerprint/classification foundation
 implemented in Milestone 1 (2026-10-03). Descriptor loading and pure selection/
 preview are implemented in Milestone 2. Suite execution and definition snapshots
-are implemented in Milestone 3. Grouped reporting/comparison context remain
-future milestones, not shipped features. See
+are implemented in Milestone 3. Generic grouped reporting and comparison context
+are implemented in Milestone 4. Sales Agent adoption remains unstarted. See
 [the ExecPlan](../plans/test-taxonomy-datasets-suites.md).
 
 ## Context
@@ -167,9 +167,8 @@ Package version 0.1.0 alone does not distinguish this unreleased milestone.
 Descriptors distinguish authored version, descriptor fingerprint, full case
 fingerprint, and selected subset fingerprint. Suite pins explicitly name expected
 case and descriptor fingerprints. Selection precedes the runner; scorer selection
-belongs to suite/run configuration, never concrete classes on TestCase. Grouped
-reporting and compatibility-aware comparisons will follow in Milestone 4; this
-milestone does not claim those APIs already distinguish new context.
+belongs to suite/run configuration, never concrete classes on TestCase. Milestone 4
+adds persisted-evidence grouping and explicit comparison context, as recorded below.
 
 None of those future behaviors alters legacy judge evidence. The current
 generic rubric builder includes tags, and Target.invoke receives the whole
@@ -177,3 +176,40 @@ TestCase; this milestone does not change either boundary. Dataset/integration
 authors remain responsible for forwarding only application inputs to a target.
 New readers preserve old artifacts; old releases do not understand v2 and must
 not resave or relabel v2 documents after dropping fields.
+
+## Grouping and comparison context (Milestone 4)
+
+Group only persisted classification and evidence. Category/risk partitions keep
+known null distinct from missing historical definitions. Tags overlap, retain
+legacy membership evidence, and deduplicate repeated tags only for reporting.
+Keep the existing mean-of-judged-case pass rate and separate attempt error rate;
+retain successful independent scorer values/counts on ERROR attempts. Risk never
+weights results. Pure dataclass records serialize with `dataclasses.asdict`.
+Markdown renderers escape authored text and use observed-change language.
+
+Extend RunComparison additively with explicit context and independent baseline/
+candidate group summaries. Checks distinguish identity/version, full/subset hashes
+and schemes, descriptor changes, per-case definitions/classification, suite and
+selection definitions versus membership, effective evaluation configuration and
+target version observations. Equal recorded values differ from unknown/missing
+evidence. Changed context takes precedence in the overall status, while every
+individual unknown remains visible. Existing numeric and legacy flag contracts
+remain descriptive rather than new regression gates.
+
+Different named dataset IDs suppress same-ID joins. Missing identity retains
+legacy numeric diagnostics under the explicit `unverified_ids` scope for backward
+compatibility, without claiming scenario equivalence. Group comparisons show both
+memberships and never silently replace changing groups with a matched subset.
+Missing/changed definition or evaluator context qualifies all group deltas.
+
+Payload policy/default/requirement changes belong to artifact context, separately
+from evaluation equivalence. Hashes-only retains definition-hash comparison but
+cannot provide field-level input/reference diagnostics. Full payloads provide
+those field fingerprints without exporting the bodies. Projected descriptor
+completeness and safe metadata policies remain visible. Reporting does not reopen
+datasets or change replay/calibration verification, execution or result schemas.
+
+The explicit offline example exercises preview, fake execution, JSON/SQLite
+persistence, grouping and comparison with unrelated opaque fixture values. It is
+inert on import and writes only to its supplied output directory. Milestone 5
+adoption and study authoring remain unstarted.

@@ -4,8 +4,8 @@ This ExecPlan was created on 2026-10-02 and is **approved with the four
 amendments incorporated on 2026-10-03**: strict v2 whitespace/direct validation,
 explicit suite fingerprint types, explicit case payload persistence policy,
 and deferred cross-study ID reuse decisions. Subsequent requests authorized
-Milestones 1, 2 and 3 individually; **all three are completed and validated below**.
-Milestones 4–5 remain unstarted; do not begin Milestone 4 without explicit approval.
+Milestones 1–4 individually; **all four are completed and validated below**.
+Milestone 5 remains unstarted; do not begin it without explicit approval.
 Frozen datasets, stored runs, replay artifacts, and calibration artifacts are
 unchanged. No live targets or judges were invoked.
 
@@ -15,6 +15,8 @@ Milestone 2 starting HEAD: `a3d9d96719d87be8b6ca30bcd387e61f8bc5aa67`
 (committed Milestone 1; clean worktree verified before Milestone 2).
 Milestone 3 starting HEAD: `3352ea57849865bd2d87f0e318bb5f6ff9b80086`
 (committed Milestone 2; clean worktree verified before Milestone 3).
+Milestone 4 starting HEAD: `262b27ba6917d1ac6631c75ae1e8b3adeeddedd3`
+(committed Milestone 3; clean worktree verified before Milestone 4).
 The worktree was clean before this document was added. Continue this coherent
 slice on the existing feature branch; do not merge, rebase, delete branches,
 or rewrite history. Check for intervening repository changes before starting
@@ -77,9 +79,10 @@ coverage-matrix approval and completed, validated generic Milestones 1–4.
   (2026-10-03; explicit Milestone 2 implementation authorization).
 - [x] Milestone 3: suite execution and immutable result snapshots
   (2026-10-03; explicit Milestone 3 implementation authorization).
-- [ ] Milestone 4: grouped reporting and comparison context.
+- [x] Milestone 4: grouped reporting and comparison context
+  (2026-10-03; explicit Milestone 4 implementation authorization).
 - [ ] Milestone 5: study layout and adoption documentation only.
-- [ ] Complete offline acceptance and record final results/deviations.
+- [x] Complete generic Milestones 1–4 offline acceptance and record results/deviations.
 - [ ] Separate future approval: 50-case coverage matrix and case authoring.
 
 ## Current boundaries and compatibility hazards
@@ -1537,7 +1540,123 @@ Hashes-only does not redact target response evidence; full mode does not promise
 self-contained replay. Existing comparison APIs have not gained context awareness
 and grouped reporting remains unimplemented, as required by this milestone.
 
-**Milestone 3 is complete. Stop before Milestone 4 until explicitly approved.**
+**Milestone 3 completion checkpoint (subsequently approved for Milestone 4).**
 No grouping, comparison-context changes, 50-case study authoring, UI, latest-status
 service, target protocol redesign, plugin registry or per-case scorer dispatch
 was implemented. No outstanding Milestone 3 work remains.
+
+## Milestone 4 implementation record — 2026-10-03
+
+Explicit authorization was limited to generic grouped reporting and comparison
+context. Re-read AGENTS.md, the amended plan and the request before editing.
+Confirmed Milestone 3 committed at `262b27ba6917d1ac6631c75ae1e8b3adeeddedd3`
+on `feat/test-taxonomy-suites`, with a clean worktree and no intervening relevant
+changes. The initial comparison/suite/fingerprint baseline passed **213 tests**.
+Inventoried the same 23 protected artifact/dataset/fixture files before editing.
+
+### Delivered behavior
+
+`reporting/grouping.py::group_run_results(result, by=...)` returns frozen group
+records serializable with `dataclasses.asdict`. It reads only the supplied
+persisted evidence. Category/risk partition cases; explicit null definitions
+and missing historical snapshots have distinct classification states. Tags
+use persisted CaseResult tags, including legacy tags, deduplicate membership
+without changing stored values, and expose an untagged group. Tag totals are
+explicitly non-additive. Group order is first observed, members retain run
+order, and scorer names are sorted deterministically.
+
+Records include definition availability/count, member IDs, case/judged-case/
+attempt counts, four separate verdict counts, quality pass rate, error rate,
+and scorer means/evidence counts. Quality is the existing mean of judged case
+pass rates, null without quality evidence. Error rate is ERROR attempts divided
+by all attempts (zero with no attempts). Independent successful scores remain
+in scorer means even on ERROR attempts. No weighting or new quality gate exists.
+The small Markdown renderers escape authored labels, titles, IDs and scorer names.
+
+`compare_runs` retains existing numeric metrics, legacy flags and the descriptive
+`regressed_case_ids` property. New context checks expose equal/changed/unknown,
+reasons, detached evidence, affected IDs and ordered baseline/candidate members.
+Checks cover dataset identity/version, full/subset hashes and scheme, descriptor,
+case definitions/classification, suite and selection, membership, attempts,
+profile/scorer/judge configuration, target/version and evidence-schema observations.
+Different schemes do not establish digest equivalence. Missing metadata and
+incomplete custom-scorer configuration remain unknown.
+
+Evaluation context and artifact/payload-policy context are separate: changing
+only full versus hashes-only persistence is visible without inventing a quality
+configuration change. Full-payload input/reference diagnostics export hashes,
+not copies of application bodies; absent payloads yield unknown diagnostics.
+These descriptive checks use recorded evidence and do not replace replay's
+source-integrity verification.
+
+Known different named datasets cannot join cases by coincident IDs. For legacy
+API compatibility, absent identity retains same-ID descriptive diagnostics with
+an explicit `unverified_ids` scope; this is never proof of scenario equivalence.
+Group comparisons show each side independently and expose ordered membership
+changes, including reordering. Unknown historical classification never joins a
+known-null group. Reports say observed increase/decrease/unchanged and qualify
+changed/unknown context; they do not introduce target-regression classifications.
+
+The inert-on-import `examples/taxonomy_suites.py` uses synthetic opaque fixture
+data and explicitly invoked deterministic fakes. It previews, executes, saves,
+reloads and then groups/compares persisted evidence. It requires an explicit
+output directory and refuses to overwrite its SQLite, JSON or Markdown outputs.
+The standalone invocation succeeded in a fresh temporary directory. Baseline
+quality was 0.5, candidate quality 1.0, and both error rates 0.25; all four verdicts
+were represented in baseline evidence. Four cases produced five tag memberships.
+The recorded target revision change qualified the observed increase.
+
+README, the generic authoring guide and ADR 0006 document the API, comparison
+limits, safe rendering and example. No core execution, model, persistence,
+replay, calibration, target or scorer code was changed in this milestone.
+
+### Validation and compatibility
+
+Focused final checks:
+
+```sh
+.venv/bin/python -m pytest tests/test_grouping.py tests/test_comparison.py tests/test_taxonomy_example.py tests/test_salesagent_baseline.py tests/test_salesagent_semantic.py -q
+```
+
+Result: **172 passed**, including existing Sales Agent comparison wrappers.
+New coverage totals **55 tests**: 18 grouping, 36 comparison and one end-to-end
+example test. It covers the required null/unknown, verdict/scorer arithmetic,
+classification drift, selection/membership drift, profile and scheme changes,
+legacy compatibility, safe rendering and offline example cases.
+
+Final required commands:
+
+```sh
+.venv/bin/python -m pytest
+.venv/bin/ruff check src tests examples
+.venv/bin/mypy src
+git diff --check
+```
+
+Results: **1,101 passed**; Ruff passed; mypy passed for **33 source files**;
+diff whitespace check passed. The full suite includes existing fingerprint,
+serialization, replay and calibration identity/binding tests. No expected legacy
+hashes or fixture values changed. All automated execution was offline.
+
+A final read-only SHA-256 probe verified all **23** inventoried files unchanged.
+Both frozen Sales Agent dataset byte hashes and legacy case hashes still equal
+the protection table exactly; the synthetic legacy fixture retains SHA-256
+`5818ce99cec46d4ec82095b7a6e9eb11685a8537248cff8eae2419e95dd49e4b`.
+Historical runs, replay/calibration artifacts and human bindings were not written.
+
+### Decisions, limitations and stop point
+
+No material deviation from the approved plan. Routine choices are frozen
+serializable dataclasses, first-observed group ordering, separate artifact
+context, and explicit legacy unverified-ID diagnostic scope. Context equality
+means equality of the available recorded contract, not independent proof that
+an integration recorded all hidden behavior. Missing observations remain unknown.
+Hashes-only reporting works without source cases but cannot supply absent input/
+reference evidence. Group summaries are descriptive, without risk weighting,
+statistical claims or regression gates.
+
+**Milestone 4 is complete. Stop before Milestone 5 until explicitly approved.**
+Milestones 1–4 generic offline acceptance is complete. Sales Agent adoption,
+50-case study authoring, vocabulary, UI, latest-status service, charts and
+calibration reporting changes remain unstarted. No commits, staging, merges or
+history changes were performed during Milestone 4.

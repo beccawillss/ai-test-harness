@@ -1,9 +1,8 @@
 # Test taxonomy and dataset selection
 
-Milestones 1–3 provide case classification, versioned fingerprints,
-descriptor-aware loading, deterministic selection, suite execution and persisted
-definition snapshots. Grouped reports, comparison-context extensions and UI are
-not implemented yet. Direct runner calls default to v1; classified cases require
+Milestones 1–4 provide case classification, versioned fingerprints,
+descriptor-aware loading, deterministic selection, suite execution, persisted
+definition snapshots, grouped reports and comparison context. No UI is implemented. Direct runner calls default to v1; classified cases require
 explicit `fingerprint_scheme="dataset-cases-v2"` or the suite execution API.
 
 The harness owns the mechanism; dataset authors own opaque category, tag, and
@@ -290,4 +289,153 @@ v2 results (the package version has not been bumped). Older readers may discard
 new fields and must not resave v2 results. New code preserves frozen v1 dataset,
 run/replay serialization and calibration binding hashes exactly. No historical
 artifact rewrite or calibration rebinding is needed. Grouped reporting and
-comparison-context changes remain Milestone 4.
+comparison context consume these persisted definitions as described below.
+
+## Group saved results
+
+```python
+from dataclasses import asdict
+from harness.reporting.grouping import group_run_results, render_groups_markdown
+
+result = store.load(run_id)
+groups = group_run_results(result, by="category")  # also "tags" or "risk"
+records = [asdict(group) for group in groups]       # JSON-serializable
+markdown = render_groups_markdown(groups, title="Saved case evidence")
+```
+
+This pure API reads persisted `RunResult`/`CaseResult` evidence only. No current
+dataset is opened, no missing snapshot is filled, and source objects are never
+modified. Duplicate case IDs are rejected. Empty runs return an empty tuple.
+Group order is first appearance in the stored run; members retain run order.
+Scorer summaries are sorted by stable scorer name.
+
+`GroupResult` contains:
+
+- `dimension`, opaque `value`, and `classification_state`: `value`, `unclassified`,
+  `unavailable`, or `untagged`. Known-null category/risk has state `unclassified`;
+  a missing historical definition is separately `unavailable`.
+- `definition_availability`: `complete`, `partial`, or `unavailable`, plus
+  `definition_count`. Legacy tags remain usable even without a definition.
+- `member_case_ids`, `case_count`, `judged_case_count`, and `attempt_count`.
+- Separate `pass_count`, `fail_count`, `error_count`, and `skip_count`.
+- `quality_pass_rate`, `error_rate`, and `scorers` containing each name, mean and
+  successful `evidence_count`; plus `totals_additive`.
+
+Category/risk partition cases into exactly one group each. Tags overlap: a case
+belongs once to each distinct tag group. Duplicate legacy tags are deduplicated
+for membership only; stored tags/hashes stay unchanged. Untagged cases have an
+explicit null-valued `untagged` group. Tag totals are non-additive.
+
+Quality pass rate is the mean of case pass rates over cases with PASS/FAIL
+evidence, never an attempt-weighted or risk-weighted score. All-error, all-skip
+and no-attempt groups have null quality pass rate. Error rate is ERROR attempts
+divided by all attempts (zero when there are none). Successful independent scorer
+values still contribute when another scorer errored. No composite gate is added.
+For PASS/ERROR on one case and FAIL/SKIP on another, the group has four attempts,
+one of every verdict, quality pass rate 0.5 and error rate 0.25.
+
+The small Markdown renderer escapes authored labels, scorer names and supplied
+titles as text. A literal category called `null` or `unavailable` remains a value,
+not a reserved taxonomy term; its classification state disambiguates it.
+
+## Compare saved evidence with explicit context
+
+```python
+from dataclasses import asdict
+from harness.regression.comparison import compare_runs, render_comparison_markdown
+
+comparison = compare_runs(baseline, candidate)
+document = asdict(comparison)
+markdown = render_comparison_markdown(comparison)
+```
+
+Existing numeric metrics, evidence-gain/loss properties, and legacy boolean flags
+remain available. `regressed_case_ids` retains its descriptive meaning: observed
+negative pass-rate deltas, not proven target regressions. Legacy booleans retain
+their old scope; use the new context checks to assess v2 profile/definition
+comparability. The renderer always says observed increase/decrease, unchanged,
+or insufficient evidence. It adds no quality gate or significance claim.
+
+`RunComparison.context` contains ordered `checks`, overall evaluation `status`,
+separate `artifact_status`, `case_matching`, both ordered case lists and affected
+IDs. Each `ContextCheck` includes name, `equal`/`changed`/`unknown`, reason,
+baseline/candidate evidence, availability flags, affected IDs, and scope
+(`evaluation` or `artifact`). Missing evidence is unknown, not equivalent.
+Overall status is changed if any check in its scope changed; otherwise unknown
+if any is unknown; otherwise equal. Individual unknowns remain visible even
+when another check establishes a change.
+
+Checks distinguish dataset identity/version, full/selected case hashes and
+scheme, descriptor definition/hash, authored suite/hash, authored selection,
+actual persisted membership, attempts, profile, observed/authored scorer settings,
+judge settings, target identity/capabilities/version observations and evidence
+schema. Per-case checks compare definition hashes, category, risk and tags.
+Optional legacy evaluator/version observations are compared where recorded.
+No application taxonomy vocabulary is inferred from IDs or metadata.
+
+Examples of distinct observations:
+
+| Scenario | Relevant output |
+| --- | --- |
+| Same complete recorded evaluation context | `dataset_identity: equal`, `case_definition_hash: equal`, evaluation status `equal` |
+| Descriptor prose edited, same cases | `descriptor_definition: changed`, `case_definition_hash: equal` |
+| Selection expression edited, same members | `selection_expression: changed`, `resolved_membership: equal` |
+| Legacy run without classification/profile context | `case_category: unknown`, `evaluation_profile: unknown` |
+| Different case fingerprint schemes | scheme changed/unknown; direct hash comparisons `unknown` |
+| Hashes-only versus full, same evaluation | evaluation context `equal`; payload policy/artifact context `changed` |
+
+Historical absence of a case scheme means v1 by the existing compatibility rule.
+Unsupported/contradictory schemes do not establish hash equivalence, even if
+strings happen to match. Descriptor, full case, subset and suite hashes retain
+separate checks. Descriptor-only changes never become per-case changes by
+inference. Comparison is descriptive inspection of recorded evidence, not a
+replacement for replay's source-integrity verification.
+
+Same IDs join within a shared named dataset ID; version changes remain explicit
+qualification. Different named datasets suppress case joins entirely, even for
+identical IDs. For backward compatibility, missing identity retains the existing
+same-ID numeric diagnostics, explicitly scoped as `unverified_ids`; they do not
+assert scenario equivalence. Run aggregate metrics always describe their own
+populations independently. Similar wording never establishes identity.
+
+`RunComparison.groups` contains baseline and candidate `GroupResult` records,
+ordered membership evidence and affected IDs, pass-rate metrics, interpretation
+and context qualification. Group union order is baseline first, then candidate-
+only groups, for category/tags/risk in that order. Classification state is part
+of the group key, so known null never joins historical unavailable. Changed
+membership or unknown definitions/configuration cannot produce an unqualified
+target-regression label. No extra matched-subset metric is silently substituted.
+
+Payload persistence is compared separately from evaluation. Profile payload
+requirements/defaults are excluded from evaluator equivalence; effective policy,
+policy source, available material, metadata projection and descriptor completeness
+are artifact checks. Full payloads allow input/reference field-fingerprint
+comparisons without copying private bodies into reports. Hashes-only cannot
+supply these details: that diagnostic is explicitly unknown, even if definition
+hashes compare equal. A hashes-only artifact may therefore have equal evaluation
+context but unknown field-level artifact diagnostics.
+
+Recorded equality is not a causal claim or proof of complete custom-scorer
+configuration. Missing authored configuration/judge settings remain unknown.
+Target observation checks use only named normalized scalar version fields; they
+never inspect live targets, provider clients or raw response objects.
+
+## Run the complete offline example
+
+```sh
+.venv/bin/python examples/taxonomy_suites.py --output-dir /tmp/harness-taxonomy-example
+```
+
+Choose a fresh explicit output directory. The example refuses to overwrite
+existing outputs and does nothing on import. It reads synthetic data from
+`examples/data/taxonomy/`, previews four cases, runs two attempts through
+in-memory fakes, saves/reloads both runs, then groups and compares saved evidence.
+It creates only `runs.sqlite`, `analysis.json`, and `report.md` in that directory.
+No network, credentials, Sales Agent dependency, UI or charts are involved.
+
+Baseline evidence contains PASS, FAIL, ERROR and SKIP. Candidate quality pass rate
+changes from 0.5 to 1.0 while error rate stays 0.25. The fake target revision also
+changes, so comparison explicitly qualifies the observed increase. Overlapping
+tag counts sum to five memberships for four cases. Grouped reporting does not
+modify either run or its original fingerprints. Sales Agent adoption and the
+50-case holdout study remain separately authorized future work.

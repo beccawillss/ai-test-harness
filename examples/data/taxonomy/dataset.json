@@ -1,0 +1,9 @@
+{
+  "schema_version": "dataset-descriptor-v1",
+  "id": "synthetic-taxonomy-example",
+  "version": "example-v1",
+  "title": "Offline grouping example",
+  "description": "Synthetic opaque classifications and deterministic outcomes.",
+  "cases": "cases.jsonl",
+  "fingerprint_scheme": "dataset-cases-v2"
+}
