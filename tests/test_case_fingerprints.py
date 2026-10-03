@@ -413,6 +413,10 @@ def test_v2_calibration_identity_binds_classification_independently_of_prompt(po
     assert restored.binding_hash == example.binding_hash
     verify_rebuilt(restored, prepare(source, cases, scoring))
     cases[0].category = "different family"
+    # This is a newly authored synthetic v2 source, not a historical binding.
+    from harness.core.snapshots import definition_snapshot
+
+    source.cases[0].definition = definition_snapshot(cases[0])
     source.dataset_hash = hash_cases(cases, scheme=CASE_SCHEME_V2)
     source.config_snapshot["full_dataset_hash"] = source.dataset_hash
     if policy == "full":

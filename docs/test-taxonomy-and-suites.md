@@ -1,10 +1,10 @@
 # Test taxonomy and dataset selection
 
-Milestones 1–2 provide case classification, versioned fingerprints,
-descriptor-aware loading, deterministic selection, and definition-only previews.
-Suite models/execution, v2 runner support, result snapshots, grouped reports,
-and UI are not implemented yet. Do not send classified v2 cases to the legacy
-runner, which still computes a v1 hash after execution.
+Milestones 1–3 provide case classification, versioned fingerprints,
+descriptor-aware loading, deterministic selection, suite execution and persisted
+definition snapshots. Grouped reports, comparison-context extensions and UI are
+not implemented yet. Direct runner calls default to v1; classified cases require
+explicit `fingerprint_scheme="dataset-cases-v2"` or the suite execution API.
 
 The harness owns the mechanism; dataset authors own opaque category, tag, and
 risk values. Risk does not alter scoring, gates, or weights. Definitions never
@@ -106,7 +106,8 @@ ID/version, descriptor/full/selected fingerprints and scheme names, the authored
 selector, ordered IDs, counts, `executable`, and an empty-selection reason.
 It contains no case input/reference or arbitrary metadata bodies. Its
 `executable: true` means only that membership is nonempty; no target/scorer
-capability or execution preflight has occurred. There is no suite execution API.
+capability or execution preflight has occurred. Suite execution performs the
+additional checks described below.
 
 ## Fingerprints and compatibility
 
@@ -123,6 +124,170 @@ empty subset also has a deterministic hash. Authored version labels, descriptor
 hashes, full case hashes, and selected case hashes are separate concepts.
 
 The frozen legacy dataset hashes and synthetic replay/calibration compatibility
-fixture remain unchanged. Suite fingerprint pins, execution-time payload policy,
-and historical result snapshots are reserved for the next milestone; these
-previews do not create or persist a RunResult.
+fixture remain unchanged. Previews do not create or persist a RunResult.
+
+## Bind and execute a suite
+
+Place a suite such as this in a `suites/` directory beside the descriptor:
+
+```json
+{
+  "schema_version": "suite-v1",
+  "id": "quick-checks",
+  "title": "Quick checks",
+  "description": "An explicitly selected execution group.",
+  "dataset": {
+    "id": "example-evaluation",
+    "version": "study-v1",
+    "descriptor": "../dataset.json"
+  },
+  "selection": {"tags_any": ["quick"]},
+  "attempts": 2,
+  "evaluation_profile": "example-v1"
+}
+```
+
+Required fields are schema version, suite ID, dataset binding and positive
+integer attempts. Selection defaults to `{}`; title/description/profile default
+to null. IDs reject boundary whitespace; internal whitespace is allowed. Strict
+loading rejects unknown fields, duplicate JSON keys, non-finite values and
+coercions. Bool/fraction/zero attempt counts are errors.
+
+`DatasetBinding` optionally accepts `expected_case_fingerprint` (the full ordered
+case hash) and `expected_descriptor_fingerprint` (the full normalized authored
+descriptor hash). Every supplied pin is checked independently. Digest strings
+must be 64 lowercase hexadecimal characters. `expected_fingerprint` is rejected.
+The descriptor path is relative to the suite file, allowing `../dataset.json`;
+URLs and absolute paths are rejected. Descriptor case bindings keep their
+stricter no-parent-traversal rule.
+
+`resolve_suite(path)` returns `ResolvedSuite`: authored Suite, LoadedDataset,
+SelectionPreview, resolved suite path and normalized suite fingerprint. It
+constructs no targets, scorers or judges. Its loaded source is a checked
+in-memory definition: re-resolve after disk edits. Execution rechecks in-memory
+definitions, bindings, hashes and membership, rejecting mutation since resolution.
+
+Recipe code constructs its target/scorers explicitly and calls:
+
+```python
+from harness.core.suites import EvaluationProfile, execute_suite, resolve_suite
+
+resolved = resolve_suite("path/to/suites/quick.json")
+# Inspect resolved.preview before constructing application/provider clients.
+profile = EvaluationProfile(
+    id="example-v1",
+    taxonomy_evidence="excluded",
+    scorer_configuration={"example_metric": {"version": "metric-v1"}},
+)
+# target and scorers are explicitly supplied recipe-owned instances.
+result = execute_suite(resolved, target, scorers, profile=profile)
+```
+
+`EvaluationProfile` is trusted Python configuration, not a dynamically executable
+suite-file specification. It requires an ID and `taxonomy_evidence` (`excluded`
+or `explicitly_included`). Optional fields are:
+
+- `scorer_configuration`: safe authored configuration keyed by stable scorer name.
+- `judge_configurations`: explicit existing `JudgeConfiguration` models keyed by
+  scorer name; credentials/client state are never inspected or serialized.
+- `safe_parameters`: reviewed, finite JSON profile parameters.
+- `reference_contract`: versioned contract name, paired with the explicit
+  `validate_reference(TestCase)` callback to `execute_suite()`.
+- `case_payload_snapshot`: null/default, `hashes_only` or `full`.
+- `requires_full_payload`: false by default; rejects any effective hashes-only
+  policy when true. Such a profile must also opt into full persistence.
+- `case_extra_keys` / `dataset_extra_keys`: reviewed metadata allowlists, empty by
+  default, limited to 128 unique nonempty top-level keys each.
+
+Supplied configuration is checked against public observed scorer attributes.
+Missing custom scorer configuration is recorded as `unknown`; supplied
+configuration is labelled `authored`, not automatically certified complete.
+Judge settings are explicit and checked against the scorer's model identity.
+Reference-dependent integrations must supply their named validator. It runs
+for every selected case before the first target call; it must be pure and raise
+on invalid reference contracts. The harness does not infer reference semantics.
+
+A suite profile must match the supplied profile ID. A profile-less suite still
+requires explicit profile and scorer arguments. Keyword overrides are only
+`attempts`, `evaluation_profile` and `case_payload_snapshot`. A profile override
+names the replacement whose configuration/scorers the caller supplies. Authored
+defaults, explicit overrides and effective values are recorded separately.
+Selection changes require another resolved suite definition. The authored Suite
+is never mutated. Duplicate scorers, missing capabilities, unsafe/nonserializable
+configuration, invalid references and empty membership fail before target calls.
+
+## Definition snapshots and payload policy
+
+Direct `run()` additionally accepts `fingerprint_scheme` (default v1),
+`case_extra_keys`, and `case_payload_snapshot`. New snapshot options require v2;
+an omitted v2 payload policy defaults to `hashes_only`. The runner does no suite
+selection. It freezes fingerprints before calls, so populated classification
+under v1 fails before execution. V2 snapshots and configuration are deep copies
+taken before calls; adapters/scorers receive isolated case copies per attempt.
+Historical v1 result shape and serializers remain unchanged.
+
+Every v2 CaseResult retains copied `tags` and a `definition` object containing
+`schema_version="case-definition-snapshot-v1"`, `fingerprint_scheme`, full
+`definition_hash`, title, description, category, risk and projected `extra`.
+There is no duplicate tag list inside the snapshot, and no verdict in a definition.
+Absent legacy definitions are omitted from serialization, never backfilled.
+
+`hashes_only` omits `resolved_cases` entirely. `full` explicitly persists selected
+canonical case payloads, including input/reference and null classification
+defaults, excluding `extra`. Both modes retain classification/hash context and
+the same configured metadata projection; policy never changes definition hashes.
+This policy does not redact independent target response evidence or explicitly
+authored scorer configuration.
+
+Metadata export denies everything by default. An allowlisted key copies its
+entire finite JSON subtree: the integration must review that whole subtree for
+safety. Names such as `provenance` imply no safety. Do not allowlist secrets,
+credentials, hidden prompts or arbitrary client/provider state. This is an
+explicit projection policy, not a general redaction system.
+
+The versioned `config_snapshot` records:
+
+- `organization_schema_version="run-organization-v1"`, dataset scheme, projected
+  descriptor, full descriptor hash and snapshot completeness.
+- Full source case hash, authored suite and its hash, portable locators,
+  authored selection and ordered executed IDs.
+- Effective profile (taxonomy contract, observed/authored scorer settings,
+  explicit judge settings and safe parameters), overrides, attempts, target
+  identity/capabilities and existing scorer snapshots.
+- Payload policy and its source (`default`, `profile`, `run_override`), metadata
+  allowlists and artifact capabilities.
+
+`RunResult.dataset_hash` is always the executed ordered subset. The descriptor
+hash binds full authored metadata even if its persisted snapshot is incomplete;
+an incomplete snapshot cannot reproduce that hash. Store results with the
+existing `SQLiteResultStore.save(result)`; no database migration is needed.
+Duplicate IDs are rejected on save. Save failure leaves the caller's complete
+in-memory result available for explicit retry under the original run ID.
+
+## Isolation, replay and reader compatibility
+
+Adapters receive TestCase internally but must forward only intended application
+input. Expectations/taxonomy/metadata do not belong in SUT requests. State and
+sessions remain isolated per attempt by the adapter contract.
+
+Legacy rubric evidence still includes tags and must declare explicit inclusion.
+Exclusion profiles require a named, reviewed projection; default rubric evidence
+cannot claim exclusion. Integrations must test prompt/evidence invariance under
+all classification/metadata edits. No prompt is silently changed by a profile.
+
+Artifact capabilities record `definition_payloads` and
+`external_source_cases_required`. Hashes-only always requires separately supplied
+verified cases. Full payloads still need external cases if the run selected only
+a subset or metadata needed to reproduce full definition hashes was omitted.
+`reconstruct_source_cases(result)` succeeds only when full saved payloads and
+projected metadata reconstruct the complete source exactly; otherwise it raises.
+Pass reconstructed or separately supplied verified cases to `prepare_replay()`;
+source availability does not authorize a judge call. Recorded profile judge
+settings supply the original evaluator contract; absent settings remain unknown.
+
+Readers must include the Milestone 3 snapshot implementation to consume these
+v2 results (the package version has not been bumped). Older readers may discard
+new fields and must not resave v2 results. New code preserves frozen v1 dataset,
+run/replay serialization and calibration binding hashes exactly. No historical
+artifact rewrite or calibration rebinding is needed. Grouped reporting and
+comparison-context changes remain Milestone 4.

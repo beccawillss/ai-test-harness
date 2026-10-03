@@ -4,8 +4,8 @@ This ExecPlan was created on 2026-10-02 and is **approved with the four
 amendments incorporated on 2026-10-03**: strict v2 whitespace/direct validation,
 explicit suite fingerprint types, explicit case payload persistence policy,
 and deferred cross-study ID reuse decisions. Subsequent requests authorized
-Milestones 1 and 2 individually; **both are now completed and validated below**.
-Milestones 3–5 remain unstarted; do not begin Milestone 3 without explicit approval.
+Milestones 1, 2 and 3 individually; **all three are completed and validated below**.
+Milestones 4–5 remain unstarted; do not begin Milestone 4 without explicit approval.
 Frozen datasets, stored runs, replay artifacts, and calibration artifacts are
 unchanged. No live targets or judges were invoked.
 
@@ -13,6 +13,8 @@ Working branch: `feat/test-taxonomy-suites`. Integration branch:
 `codex-evaluation`. Planning HEAD: `9198ad26d84576a319537909f146c5121412be99`.
 Milestone 2 starting HEAD: `a3d9d96719d87be8b6ca30bcd387e61f8bc5aa67`
 (committed Milestone 1; clean worktree verified before Milestone 2).
+Milestone 3 starting HEAD: `3352ea57849865bd2d87f0e318bb5f6ff9b80086`
+(committed Milestone 2; clean worktree verified before Milestone 3).
 The worktree was clean before this document was added. Continue this coherent
 slice on the existing feature branch; do not merge, rebase, delete branches,
 or rewrite history. Check for intervening repository changes before starting
@@ -73,7 +75,8 @@ coverage-matrix approval and completed, validated generic Milestones 1–4.
   (2026-10-03; explicit Milestone 1 implementation authorization).
 - [x] Milestone 2: descriptor, strict loading, pure selection and preview
   (2026-10-03; explicit Milestone 2 implementation authorization).
-- [ ] Milestone 3: suite execution and immutable result snapshots.
+- [x] Milestone 3: suite execution and immutable result snapshots
+  (2026-10-03; explicit Milestone 3 implementation authorization).
 - [ ] Milestone 4: grouped reporting and comparison context.
 - [ ] Milestone 5: study layout and adoption documentation only.
 - [ ] Complete offline acceptance and record final results/deviations.
@@ -1367,6 +1370,174 @@ Milestone 3. These previews concern membership only, do not validate profile
 references/capabilities, and do not persist full input/reference payloads or run
 results. Full snapshot policies and suite fingerprint pins remain future work.
 
-**Milestone 2 is complete. Stop before Milestone 3 until explicitly approved.**
-No suites, runner v2 options, persistence snapshots, grouping/comparison changes,
-study cases, UI or Target protocol changes were implemented.
+At Milestone 2 completion, work stopped pending explicit Milestone 3 approval.
+The subsequent authorization and implementation are recorded below. Milestone 2
+itself introduced no suites, runner v2 options or persistence snapshots.
+
+## Milestone 3 implementation and validation record (2026-10-03)
+
+Implemented only suite execution and persistence snapshots after explicit user
+authorization in the attached request. Re-read AGENTS.md and this amended plan.
+Milestone 2 was committed as `3352ea57849865bd2d87f0e318bb5f6ff9b80086` on
+`feat/test-taxonomy-suites`; the worktree was clean with no subsequent repository
+changes. The commit's 11-file diff matches the approved Milestone 2 record.
+Pre-change fingerprint/descriptor/selection checks passed: 293 tests. Inventoried
+23 existing artifact/dataset/legacy-fixture files before edits. No commits,
+merges, staging or history-changing operations were performed during this work.
+
+### Implemented APIs and execution boundary
+
+- Added strict `Suite` and `DatasetBinding` in `core/suites.py`, with local JSON
+  loading through `resolve_suite(path)`. Schema, IDs, attempt types, selection,
+  relative descriptor paths and both independently named fingerprint pins are
+  validated before execution. Suite paths allow relative parents; descriptor case
+  bindings retain Milestone 2's stricter containment. No TestCases are embedded.
+- `ResolvedSuite` contains Suite, LoadedDataset, SelectionPreview, source path
+  and normalized suite hash. Resolution does not construct targets/scorers/judges.
+  Execution revalidates in-memory definitions, membership, hashes and bindings;
+  it does not silently switch to revised disk data after resolution.
+- `execute_suite(resolved, target, scorers, *, profile, ...)` accepts explicit
+  uniform scorers and a trusted `EvaluationProfile`. The small strict profile
+  model records ID, taxonomy evidence contract, explicit scorer/judge settings,
+  safe parameters, optional named reference contract, payload policy and safe
+  metadata allowlists. It is not a file-driven executable registry. Missing
+  custom configuration is recorded as unknown; authored settings are checked
+  against public observable scorer values. Judge settings reuse the existing
+  `JudgeConfiguration` model, without client/environment introspection.
+- Supported run overrides are attempts, explicit profile ID replacement and
+  payload policy. Authored defaults, requested overrides and effective values
+  remain separate. No profile or scorer is inferred for a profile-less suite.
+- Reference-dependent integrations supply a versioned `reference_contract` and
+  pure `validate_reference(TestCase)` callback together. Every selected case is
+  checked before execution. Reference-free profiles need neither. Invalid
+  contracts/mutations, empty selection, binding errors, duplicate scorers,
+  missing capabilities and invalid snapshot configuration all fail before calls.
+- Runner extensions are `fingerprint_scheme`, `case_extra_keys` and
+  `case_payload_snapshot`. Selection stays outside `run()`. V1 remains the
+  default with its historical result shape. Hashes are now computed before
+  calls, including rejecting populated new fields under v1 before execution.
+  V2 freezes definitions/configuration and isolates case/response copies per
+  attempt and scorer. Runtime errors retain ERROR semantics and independent
+  successful scores survive other scorer failures.
+
+### Snapshot, metadata and replay contracts
+
+Added `CaseDefinitionSnapshot` and optional `CaseResult.definition`. The new
+field uses the existing narrow `exclude_if` technique: absent legacy definitions
+remain omitted, including nested RunResult JSON, preserving pinned document
+hashes. Snapshots contain schema/scheme, full definition hash, title, description,
+category, risk and projected extra. Tags remain only on CaseResult. Verdicts
+remain on attempts. Shared `core/snapshots.py` helpers keep runner/replay
+projection rules identical without changing case fingerprint algorithms.
+
+Generic v2 payload policy is `hashes_only`; `full` is explicit. Both preserve
+classification/hashes and safe metadata. Only full mode writes selected canonical
+`resolved_cases` with input/reference and no extra. Definition/dataset hashes do
+not depend on persistence policy. A full-required profile rejects hashes-only;
+policy source and explicit overrides are recorded. Capability fields identify
+payload availability and whether complete external source cases are required.
+
+Case/dataset metadata allowlists default to empty. Each accepts at most 128 unique
+nonempty top-level keys; entire nested values must be finite JSON and reviewed
+by the integration as safe. No key name implies safety. Profile safe parameters
+and explicitly authored scorer configuration carry the same caller obligation;
+structural JSON validation is not secret detection. Tests use nested secret
+sentinels to prove unallowlisted data stays absent. Descriptor completeness is
+recorded separately from the hash of the full authored descriptor.
+
+All snapshots, hashes, tags and suite/profile context are deep-copied before the
+first target call. Tests mutate original cases, selectors and nested profile
+configuration during/after execution and verify recorded history stays fixed.
+The suite wrapper attaches already-frozen context to an explicitly v2 runner
+result; it never relabels a v1 execution. Existing SQLite JSON persistence is
+unchanged. Tests cover JSON/store reloads and duplicate run IDs. Saving remains
+explicit, so callers retain the result for retry after a persistence failure.
+
+Replay now verifies required v2 definition snapshots, safe metadata policy,
+suite selection/pins and recorded evaluator context. Missing legacy scheme still
+means v1. Recorded suite judge configuration can provide the source evaluator;
+missing configuration remains unknown under existing replay rules. A new pure
+`reconstruct_source_cases()` helper succeeds only if full payloads plus projected
+metadata reproduce the entire source hashes. Hashes-only, selected subsets or
+omitted authored metadata require verified external source cases. Reconstruction
+returns detached cases, so editing them cannot rewrite the saved artifact.
+Projected descriptor metadata cannot independently reproduce a full descriptor
+hash; the completeness flag makes that limitation explicit.
+
+M1's in-test synthetic v2 source builders now include the required definitions
+and metadata policy. Tests authoring a revised synthetic definition also update
+its new snapshot. No legacy fixture, expected legacy hash, human binding or
+historical artifact was regenerated. Legacy rubric prompt/evidence behavior is
+unchanged. New exclusion profiles require named reviewed evidence projections;
+tests prove title/description/category/tags/risk/extra changes leave prepared
+prompt/evidence bytes unchanged. Default rubric evidence cannot claim exclusion.
+
+### Isolation, validation and compatibility results
+
+Recording callable and mocked HTTP tests prove changes to IDs, references,
+classification and extra leave intended SUT request bytes identical. HTTP
+sessions remain isolated between repeated attempts and cases. Target protocol
+and scorer/judge behavior were not redesigned; production adapter/scorer edits
+are documentation only. No live targets, judges, credentials or network calls
+were used. No grouped reporting/comparison implementation was added.
+
+Final required Milestone 3 command:
+
+```sh
+.venv/bin/python -m pytest tests/test_suites.py tests/test_runner.py tests/test_store.py tests/test_replay.py tests/test_calibration.py tests/test_callable_target.py tests/test_rubric_judge.py tests/test_salesagent_target.py tests/test_salesagent_baseline.py tests/test_salesagent_semantic.py
+```
+
+Result: **550 passed**, including 90 new suite/execution/snapshot tests and 16
+additional callable/HTTP isolation cases. Existing tests cover legacy runtime,
+store, judge prompt, replay, calibration and study-recipe behavior.
+
+Additional final checks:
+
+```sh
+.venv/bin/python -m pytest
+.venv/bin/ruff check src tests examples
+.venv/bin/mypy src
+git diff --check
+```
+
+Results: **1,046 passed**; Ruff passed; mypy passed for **32 source files**;
+diff whitespace check passed. Full-suite validation is justified by runner,
+CaseResult serialization and replay-boundary changes; it includes every M1/M2
+fingerprint/loader/selector test, calibration identity/binding tests and pinned
+legacy fixtures. Final checks followed the reconstructed-case aliasing fix.
+
+Intermediate failures were new/synthetic fixture setup issues: M1 v2 synthetic
+sources needed their now-required snapshots, a supposedly mismatched relative
+path actually resolved to the same descriptor, and a new calibration fixture
+omitted required evidence settings. These setups were corrected without changing
+legacy expected values or weakening validation. No failures remain.
+
+Read-only local acceptance loaded **16 historical runs** and checked model-dump
+fingerprints against original stored document fingerprints; **two saved replays**
+reloaded/round-tripped successfully. All **23** inventoried files retained their
+byte hashes. Frozen baseline/semantic byte and v1 content hashes remain exactly
+the protection-table values. The synthetic legacy fixture retains SHA-256
+`5818ce99cec46d4ec82095b7a6e9eb11685a8537248cff8eae2419e95dd49e4b`.
+Local artifacts are not test dependencies and were never written.
+
+### Decisions, limitations and stop point
+
+No material deviation from the approved architecture. Routine API decisions are
+the strict Python `EvaluationProfile`, small shared snapshot helper, 128-key
+allowlist bound, explicit reference validator hook, and conservative verified
+full-source reconstruction. These are documented in the authoring guide and
+ADR 0006. The new reader requirement is support for `run-organization-v1` and
+`case-definition-snapshot-v1`; the unreleased package version alone does not
+identify milestone support. Older readers must not resave v2 artifacts.
+
+Trusted integration code still owns confidentiality review of exported subtrees,
+complete custom-scorer configuration, reference semantics, projection invariance
+and target session isolation. JSON compatibility cannot prove any of these.
+Hashes-only does not redact target response evidence; full mode does not promise
+self-contained replay. Existing comparison APIs have not gained context awareness
+and grouped reporting remains unimplemented, as required by this milestone.
+
+**Milestone 3 is complete. Stop before Milestone 4 until explicitly approved.**
+No grouping, comparison-context changes, 50-case study authoring, UI, latest-status
+service, target protocol redesign, plugin registry or per-case scorer dispatch
+was implemented. No outstanding Milestone 3 work remains.

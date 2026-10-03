@@ -37,6 +37,11 @@ class Target(Protocol):
       calls.
     - Raise exceptions freely; the runner catches them and records
       Verdict.ERROR. Do not swallow errors into fake responses.
+    - `invoke` receives evaluator-owned TestCase data internally. Forward only
+      intended application input to the SUT: never references, IDs, taxonomy,
+      metadata or scorer expectations unless explicitly part of that input.
+      Each invocation owns fresh session state; only turns within one case
+      attempt may share it. Classification must not alter application requests.
     """
 
     @property

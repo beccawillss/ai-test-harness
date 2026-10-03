@@ -37,6 +37,7 @@ from harness.core.replay import (
     source_locator,
     variance_summary,
 )
+from harness.core.snapshots import definition_snapshot
 from harness.core.store import SQLiteResultStore
 from harness.judges.base import JudgeReply
 from harness.scorers.rubric_judge import RubricJudgeScorer
@@ -296,10 +297,14 @@ def _v2_source(policy="full", evidence_builder=None):
     cases[0].risk = "opaque risk"
     source.dataset_hash = hash_cases(cases, scheme=CASE_SCHEME_V2)
     source.config_snapshot.update(
+        organization_schema_version="run-organization-v1",
+        metadata_snapshot_policy={"case_extra_keys": [], "dataset_extra_keys": []},
         dataset_fingerprint_scheme=CASE_SCHEME_V2,
         full_dataset_hash=source.dataset_hash,
         case_payload_snapshot=policy,
     )
+    for stored, case in zip(source.cases, cases, strict=True):
+        stored.definition = definition_snapshot(case)
     if policy == "full":
         source.config_snapshot["resolved_cases"] = [
             resolved_case_payload(c, scheme=CASE_SCHEME_V2) for c in cases
@@ -460,6 +465,8 @@ def test_v2_builder_cannot_hide_nonfinite_mutation_as_serialized_null():
     source.config_snapshot["resolved_cases"] = [
         resolved_case_payload(c, scheme=CASE_SCHEME_V2) for c in cases
     ]
+    for stored, case in zip(source.cases, cases, strict=True):
+        stored.definition = definition_snapshot(case)
     with pytest.raises(ValueError, match="mutated replay inputs"):
         prepare(source, cases, scoring)
 

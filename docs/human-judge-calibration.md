@@ -264,3 +264,20 @@ The default remains `unreviewed`: score equality, score differences, a score of
 remain separate when repeated judges differ. Changing issue review creates a
 separately analyzed result; it never changes the frozen human rating. Presentation
 refresh does not add or modify any issue review.
+
+## Versioned case definitions
+
+V2 suite sources retain execution-time classification snapshots and definition
+hashes under an explicit fingerprint scheme. Replay preparation verifies these
+against the complete supplied source cases before calibration identity/binding
+construction. Both hashes-only and full payload policies support that verified
+path; hashes-only cannot reconstruct absent input/reference, and full still
+needs external cases when a subset or omitted metadata prevents full source
+reconstruction. See [replay source requirements](judge-replay.md#versioned-v2-suite-sources).
+
+Classification changes alter the case/source identity even when a reviewed
+judge projection leaves prompt bytes unchanged. They must not be applied to an
+already bound human example. Historical v1 serialization and existing human
+bindings remain exact: no stored snapshots are backfilled, no golden hashes
+change, and no annotations or calibration artifacts are regenerated. This change
+does not alter calibration cohort/strata meanings or report calculations.

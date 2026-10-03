@@ -2,8 +2,9 @@
 
 Status: accepted for the taxonomy ExecPlan; fingerprint/classification foundation
 implemented in Milestone 1 (2026-10-03). Descriptor loading and pure selection/
-preview are implemented in Milestone 2. Suites, result snapshots, and grouped
-reports remain future milestones, not shipped features. See
+preview are implemented in Milestone 2. Suite execution and definition snapshots
+are implemented in Milestone 3. Grouped reporting/comparison context remain
+future milestones, not shipped features. See
 [the ExecPlan](../plans/test-taxonomy-datasets-suites.md).
 
 ## Context
@@ -75,14 +76,13 @@ case identity includes taxonomy even when a judge projection excludes it.
 Independent full-model mutation checks prevent builders from changing new
 fields under a legacy hash, and v2 values are revalidated after preparation.
 
-This is verification support, not a new run persistence or suite feature.
-CaseResult classification snapshots, their additional verification, and policy
-selection at execution time remain Milestone 3. No descriptor loading or suite
-execution is introduced by Milestone 1. The existing runner remains a v1 caller;
-new classified cases must use explicit v2 fingerprint APIs and are not yet
-supported by the ordinary runner. Do not invoke that runner with populated new
-fields: its legacy hash is calculated after execution. Runner preflight and
-explicit v2 execution belong to the approved Milestone 3 changes.
+Milestone 3 extends this foundation to actual v2 runs: required CaseResult
+classification snapshots and metadata policies verify against supplied source
+cases. The runner now supports explicit v2 execution and freezes hashes before
+calls, including rejecting populated new fields under v1 before execution.
+Missing legacy definition fields remain omitted, preserving historical hashes.
+Synthetic M1 v2 test builders now include the required snapshot context; pinned
+legacy fixtures and expected hashes are unchanged.
 
 Never rewrite frozen files, historical documents, expected hashes, replay
 identities, or human bindings. Synthetic compatibility fixtures were generated
@@ -114,15 +114,62 @@ hashes, selection, ordered IDs, counts and membership eligibility. Neither path
 imports or constructs targets, scorers, judges or the runner. See the
 [authoring guide](../test-taxonomy-and-suites.md) for examples and exact semantics.
 
+## Suite execution and snapshots (Milestone 3)
+
+`Suite` strictly binds one descriptor-aware dataset and selector, an attempt
+count and an optional logical profile. Optional case and descriptor fingerprint
+pins are checked separately before execution. `resolve_suite()` validates all
+source material without constructing execution clients. `execute_suite()` takes
+explicit uniform scorers, target and trusted `EvaluationProfile` configuration;
+it rechecks bindings/membership and invokes integration reference validators for
+all selected cases before calling the runner. No dynamic scorer dispatch exists.
+
+`EvaluationProfile` records safe authored configuration and the taxonomy evidence
+contract. Missing custom settings remain unknown. Explicit `JudgeConfiguration`
+is reused rather than inspecting provider clients. Supported overrides are
+attempts, profile ID and payload policy. Full-required profiles reject hashes-only
+execution. Reviewed evidence projection contracts do not change legacy prompts.
+
+V2 `CaseResult.definition` is a deep execution-time copy of classification,
+definition hash, scheme and projected metadata. Existing `CaseResult.tags` remains
+the sole copied tag list. The field is absent from legacy serialization when null.
+Case/response copies isolate v2 attempts and independent scorers; target session
+isolation remains an adapter responsibility. Shared `core/snapshots.py` helpers
+keep execution/replay projection rules identical without changing fingerprints.
+
+The runner stays selection-neutral and defaults to v1. New v2 options are an
+explicit scheme, metadata-key allowlist and payload policy. It records subset
+hashes before execution; suite context is also copied before calls. The suite
+wrapper attaches that frozen context to the v2 result, never relabelling a v1 run.
+Existing JSON persistence needs no SQL changes.
+
+Hashes-only is the generic default: no input/reference copies in run context.
+Full persistence records canonical resolved cases excluding extra. Both modes
+record definitions and explicit safe metadata projection. Allowlists are limited
+to 128 unique nonempty top-level keys per case/dataset; their complete subtrees
+must be reviewed by integrations. Descriptor completeness is explicit, and its
+hash always binds full authored metadata.
+
+Replay checks snapshots, scheme/policy, suite membership/pins and recorded
+evaluator context. Full reconstruction is allowed only if persisted payloads and
+projected metadata reproduce the complete source hashes; selected subsets or
+missing metadata require verified external source cases. Hashes-only cannot
+reconstruct missing inputs. A projected descriptor does not independently
+reproduce its full authored descriptor hash; its completeness flag preserves
+that limit. Artifact capabilities expose payload and external-case requirements.
+
+Minimum readers for these artifacts must support `run-organization-v1` and
+`case-definition-snapshot-v1` (Milestone 3), beyond M1's case-fingerprint support.
+Package version 0.1.0 alone does not distinguish this unreleased milestone.
+
 ## Subsequent milestones and limits
 
 Descriptors distinguish authored version, descriptor fingerprint, full case
-fingerprint, and selected subset fingerprint. Suite pins will explicitly
-name expected case and descriptor fingerprints. Selection will precede the
-runner; scorer selection belongs to suite/run configuration, never concrete
-classes on TestCase. New runs will snapshot classification and safe metadata
-at execution time under either hash-only or explicitly full payload policy.
-Comparisons must distinguish definition, configuration, and membership changes.
+fingerprint, and selected subset fingerprint. Suite pins explicitly name expected
+case and descriptor fingerprints. Selection precedes the runner; scorer selection
+belongs to suite/run configuration, never concrete classes on TestCase. Grouped
+reporting and compatibility-aware comparisons will follow in Milestone 4; this
+milestone does not claim those APIs already distinguish new context.
 
 None of those future behaviors alters legacy judge evidence. The current
 generic rubric builder includes tags, and Target.invoke receives the whole

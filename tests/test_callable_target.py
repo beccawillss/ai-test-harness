@@ -108,7 +108,9 @@ def test_callable_exception_is_recorded_as_infrastructure_error():
     assert attempt.verdict is Verdict.ERROR
     assert attempt.response is None
     assert attempt.scores == []
-    assert "target 'unavailable-app': TimeoutError: application timed out" == attempt.error
+    assert (
+        "target 'unavailable-app': TimeoutError: application timed out" == attempt.error
+    )
     assert result.aggregate_pass_rate is None
     assert result.error_rate == 1.0
 
@@ -169,3 +171,37 @@ def test_callable_target_rejects_empty_names(name: str):
 def test_callable_target_rejects_non_callable_invoker():
     with pytest.raises(TypeError, match="invoke must be callable"):
         CallableTarget(name="invalid", invoke=None)  # type: ignore[arg-type]
+
+
+@pytest.mark.parametrize(
+    "field,value",
+    [
+        ("id", "other"),
+        ("reference", {"private": "expected"}),
+        ("title", "new title"),
+        ("description", "new prose"),
+        ("category", "new family"),
+        ("tags", ["new tag"]),
+        ("risk", "critical"),
+        ("extra", {"private": "secret"}),
+    ],
+)
+def test_application_input_bytes_exclude_evaluator_definition(field, value):
+    from harness.core.fingerprints import canonical_json
+
+    requests = []
+
+    def application(payload):
+        requests.append(canonical_json(payload).encode("utf-8"))
+        return "answer"
+
+    target = CallableTarget(
+        name="input-only-adapter",
+        invoke=lambda case: TargetResponse(output=application(case.input)),
+    )
+    original = _case()
+    revised = original.model_copy(deep=True)
+    setattr(revised, field, value)
+    target.invoke(original)
+    target.invoke(revised)
+    assert requests[0] == requests[1]
