@@ -18,7 +18,7 @@ from enum import StrEnum
 from typing import Any
 from uuid import uuid4
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 def _utcnow() -> datetime:
@@ -56,6 +56,8 @@ class TestCase(BaseModel):
     structured inputs (e.g. an agent task definition). `reference` holds
     whatever ground truth the scorers need — expected answer, relevant doc
     ids, success criteria — and may be absent for reference-free metrics.
+    `extra` is the arbitrary case metadata container. Classification values
+    are opaque; risk never changes scoring or gating semantics.
     """
 
     id: str
@@ -63,6 +65,29 @@ class TestCase(BaseModel):
     reference: str | dict[str, Any] | None = None
     tags: list[str] = Field(default_factory=list)  # e.g. ["retrieval", "smoke"]
     extra: dict[str, Any] = Field(default_factory=dict)
+    # Omit only new null fields, preserving every legacy default/null and dump.
+    title: str | None = Field(default=None, strict=True, exclude_if=lambda v: v is None)
+    description: str | None = Field(
+        default=None, strict=True, exclude_if=lambda v: v is None
+    )
+    category: str | None = Field(
+        default=None, strict=True, exclude_if=lambda v: v is None
+    )
+    risk: str | None = Field(default=None, strict=True, exclude_if=lambda v: v is None)
+
+    @field_validator("title", "category", "risk")
+    @classmethod
+    def nonblank_definition_text(cls, value: str | None) -> str | None:
+        if value is not None and not value.strip():
+            raise ValueError("Definition text must not be blank")
+        return value
+
+    @field_validator("category", "risk")
+    @classmethod
+    def taxonomy_whitespace(cls, value: str | None) -> str | None:
+        if value is not None and value != value.strip():
+            raise ValueError("Taxonomy values must not have boundary whitespace")
+        return value
 
 
 # ---------------------------------------------------------------------------

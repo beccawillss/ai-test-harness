@@ -7,6 +7,13 @@ import json
 from collections.abc import Iterable
 from pathlib import Path
 
+from harness.core.case_fingerprints import (
+    CASE_SCHEME_V1,
+    CASE_SCHEME_V2,
+    case_payload,
+    validate_case_scheme,
+)
+from harness.core.fingerprints import fingerprint
 from harness.core.models import TestCase
 
 
@@ -34,12 +41,17 @@ def load_cases(path: str | Path) -> list[TestCase]:
     return cases
 
 
-def hash_cases(cases: Iterable[TestCase]) -> str:
-    """Fingerprint parsed cases in order, independent of JSON formatting."""
+def hash_cases(cases: Iterable[TestCase], *, scheme: str = CASE_SCHEME_V1) -> str:
+    """Hash ordered definitions; the default retains the exact legacy format."""
+    validate_case_scheme(scheme)
+    if scheme == CASE_SCHEME_V2:
+        return fingerprint(
+            {"scheme": scheme, "cases": [case_payload(c, scheme=scheme) for c in cases]}
+        )
     digest = hashlib.sha256()
     for case in cases:
         payload = json.dumps(
-            case.model_dump(mode="json"),
+            case_payload(case, scheme=scheme),
             sort_keys=True,
             separators=(",", ":"),
         )

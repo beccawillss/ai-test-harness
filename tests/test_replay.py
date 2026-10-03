@@ -6,6 +6,12 @@ from datetime import UTC, datetime
 
 import pytest
 
+from harness.core.case_fingerprints import (
+    CASE_SCHEME_V1,
+    CASE_SCHEME_V2,
+    hash_case_definition,
+    resolved_case_payload,
+)
 from harness.core.dataset import hash_cases
 from harness.core.fingerprints import canonical_json, fingerprint
 from harness.core.models import (
@@ -22,6 +28,7 @@ from harness.core.models import TestCase as Case
 from harness.core.replay import (
     EvaluatorConfiguration,
     JudgeConfiguration,
+    PreparedReplay,
     ReplayAttemptResult,
     ReplayResult,
     SourceProvenance,
@@ -275,6 +282,208 @@ def test_errors_retain_successes_and_per_call_observations():
         result.summary["known_cost_usd"] == 0.01 and not result.summary["cost_complete"]
     )
     assert "SECRET" not in result.model_dump_json()
+
+
+def _v2_source(policy="full", evidence_builder=None):
+    def no_judge(_):
+        raise AssertionError("Source preparation must not call a judge")
+
+    options = {} if evidence_builder is None else {"evidence_builder": evidence_builder}
+    source, cases, scoring = fixture_run(scorer(no_judge, **options))
+    cases[0].title = "Example"
+    cases[0].description = "Synthetic definition."
+    cases[0].category = "family a"
+    cases[0].risk = "opaque risk"
+    source.dataset_hash = hash_cases(cases, scheme=CASE_SCHEME_V2)
+    source.config_snapshot.update(
+        dataset_fingerprint_scheme=CASE_SCHEME_V2,
+        full_dataset_hash=source.dataset_hash,
+        case_payload_snapshot=policy,
+    )
+    if policy == "full":
+        source.config_snapshot["resolved_cases"] = [
+            resolved_case_payload(c, scheme=CASE_SCHEME_V2) for c in cases
+        ]
+    else:
+        del source.config_snapshot["resolved_cases"]
+    return source, cases, scoring
+
+
+@pytest.mark.parametrize("policy", ["full", "hashes_only"])
+def test_v2_source_preparation_and_provenance_roundtrip(policy):
+    source, cases, scoring = _v2_source(policy)
+    before = source.model_dump_json()
+    prepared = prepare(source, cases, scoring)
+    assert prepared.source.dataset_fingerprint_scheme == CASE_SCHEME_V2
+    assert prepared.source.case_hash == hash_case_definition(
+        cases[0], scheme=CASE_SCHEME_V2
+    )
+    assert prepared.source.dataset_hash == source.dataset_hash
+    assert prepared.source.full_dataset_hash == hash_cases(cases, scheme=CASE_SCHEME_V2)
+    assert PreparedReplay.model_validate_json(prepared.model_dump_json()) == prepared
+    assert source.model_dump_json() == before
+    # Reuse an existing valid offline replay result shape, without executing a judge.
+    result = ReplayResult(
+        input=prepared,
+        started_at=datetime(2026, 1, 1, tzinfo=UTC),
+        finished_at=datetime(2026, 1, 1, tzinfo=UTC),
+        attempts=tuple(
+            ReplayAttemptResult(
+                index=i,
+                verdict=Verdict.ERROR,
+                error="judge_execution_error",
+                input_hash=prepared.input_hash,
+                started_at=datetime(2026, 1, 1, tzinfo=UTC),
+                duration_ms=0.0,
+            )
+            for i in range(prepared.requested_attempt_count)
+        ),
+    )
+    assert ReplayResult.model_validate_json(result.model_dump_json()) == result
+
+
+@pytest.mark.parametrize("policy", ["full", "hashes_only"])
+@pytest.mark.parametrize(
+    "field",
+    ["title", "description", "category", "risk", "tags", "extra", "input", "reference"],
+)
+def test_v2_source_definition_tampering_rejected_before_preparation(policy, field):
+    source, cases, scoring = _v2_source(policy)
+
+    def no_prepare(*_):
+        raise AssertionError("Tampered source must fail before evidence preparation")
+
+    scoring.prepare = no_prepare
+    value = (
+        ["changed"]
+        if field == "tags"
+        else {"changed": True}
+        if field == "extra"
+        else "changed"
+    )
+    setattr(cases[0], field, value)
+    with pytest.raises(ValueError, match="fingerprint differs"):
+        prepare(source, cases, scoring)
+
+
+@pytest.mark.parametrize("policy", ["full", "hashes_only"])
+def test_v2_missing_external_source_material_is_not_reconstructed(policy):
+    source, cases, scoring = _v2_source(policy)
+    with pytest.raises(ValueError, match="absent from dataset"):
+        prepare(source, cases[1:], scoring)
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        "unknown_scheme",
+        "null_scheme",
+        "missing_scheme",
+        "downgraded_scheme",
+        "missing_policy",
+        "unknown_policy",
+        "null_policy",
+        "missing_full_hash",
+        "missing_selection",
+        "missing_full_payload",
+        "hash_only_with_payload",
+        "resolved_category",
+        "resolved_default",
+        "resolved_scalar_type",
+    ],
+)
+def test_v2_source_context_and_resolved_payload_rejections(change):
+    source, cases, scoring = _v2_source()
+    snapshot = source.config_snapshot
+    if change == "unknown_scheme":
+        snapshot["dataset_fingerprint_scheme"] = "dataset-cases-v3"
+    elif change == "null_scheme":
+        snapshot["dataset_fingerprint_scheme"] = None
+    elif change == "missing_scheme":
+        del snapshot["dataset_fingerprint_scheme"]
+    elif change == "downgraded_scheme":
+        snapshot["dataset_fingerprint_scheme"] = CASE_SCHEME_V1
+    elif change == "missing_policy":
+        del snapshot["case_payload_snapshot"]
+    elif change in ("unknown_policy", "null_policy"):
+        snapshot["case_payload_snapshot"] = None if change == "null_policy" else "guess"
+    elif change == "missing_full_hash":
+        del snapshot["full_dataset_hash"]
+    elif change == "missing_selection":
+        del snapshot["selection"]
+    elif change == "missing_full_payload":
+        del snapshot["resolved_cases"]
+    elif change == "hash_only_with_payload":
+        snapshot["case_payload_snapshot"] = "hashes_only"
+    elif change == "resolved_category":
+        snapshot["resolved_cases"][0]["category"] = "different"
+    elif change == "resolved_default":
+        del snapshot["resolved_cases"][1]["risk"]
+    else:
+        cases[0].reference = {"expected": 1}
+        source.dataset_hash = hash_cases(cases, scheme=CASE_SCHEME_V2)
+        snapshot["full_dataset_hash"] = source.dataset_hash
+        snapshot["resolved_cases"][0]["reference"] = {"expected": True}
+    with pytest.raises(ValueError):
+        prepare(source, cases, scoring)
+
+
+@pytest.mark.parametrize("field", ["title", "description", "category", "risk"])
+@pytest.mark.parametrize("v2", [False, True])
+def test_definition_mutation_by_builder_is_detected_even_under_legacy_hashing(
+    field, v2
+):
+    def mutate(case, response):
+        setattr(case, field, "changed")
+        return {"answer": response.output}
+
+    source, cases, scoring = (
+        _v2_source(evidence_builder=mutate)
+        if v2
+        else fixture_run(scorer(evidence_builder=mutate))
+    )
+    before = [c.model_dump() for c in cases]
+    with pytest.raises(ValueError, match="mutated replay inputs"):
+        prepare(source, cases, scoring)
+    assert [c.model_dump() for c in cases] == before
+
+
+def test_v2_builder_cannot_hide_nonfinite_mutation_as_serialized_null():
+    def mutate(case, response):
+        case.reference["value"] = float("nan")
+        return {"answer": response.output}
+
+    source, cases, scoring = _v2_source(evidence_builder=mutate)
+    cases[0].reference = {"value": None}
+    source.dataset_hash = hash_cases(cases, scheme=CASE_SCHEME_V2)
+    source.config_snapshot["full_dataset_hash"] = source.dataset_hash
+    source.config_snapshot["resolved_cases"] = [
+        resolved_case_payload(c, scheme=CASE_SCHEME_V2) for c in cases
+    ]
+    with pytest.raises(ValueError, match="mutated replay inputs"):
+        prepare(source, cases, scoring)
+
+
+def test_explicit_v1_does_not_inject_a_new_provenance_key():
+    source, cases, scoring = fixture_run()
+    source.config_snapshot["dataset_fingerprint_scheme"] = CASE_SCHEME_V1
+    prepared = prepare(source, cases, scoring)
+    assert prepared.source.dataset_fingerprint_scheme is None
+    assert "dataset_fingerprint_scheme" not in prepared.model_dump()["source"]
+    assert (
+        "dataset_fingerprint_scheme"
+        not in json.loads(prepared.model_dump_json())["source"]
+    )
+    assert "full_dataset_hash" in prepared.model_dump()["source"]
+
+
+def test_legacy_without_full_hash_does_not_inspect_unselected_cases():
+    source, cases, scoring = fixture_run()
+    del source.config_snapshot["full_dataset_hash"]
+    extra_case = Case(id="unselected", input="hi", category="new classification")
+    assert (
+        prepare(source, [*cases, extra_case], scoring).source.full_dataset_hash is None
+    )
 
 
 @pytest.mark.parametrize(
