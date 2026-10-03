@@ -4,9 +4,17 @@ from __future__ import annotations
 
 from collections import Counter
 from collections.abc import Sequence
+from copy import deepcopy
 from datetime import UTC, datetime
 from time import perf_counter
 
+from harness.core.case_fingerprints import (
+    CASE_SCHEME_V1,
+    CASE_SCHEME_V2,
+    resolved_case_payload,
+    validate_case_scheme,
+    validate_json_data,
+)
 from harness.core.dataset import hash_cases
 from harness.core.models import (
     AttemptResult,
@@ -17,6 +25,7 @@ from harness.core.models import (
     TestCase,
     Verdict,
 )
+from harness.core.snapshots import definition_snapshot, metadata_keys
 from harness.scorers.base import Scorer
 from harness.targets.base import CloseableTarget, Target, check_pack_compatibility
 
@@ -76,6 +85,8 @@ def _execute_attempt(
     case: TestCase,
     target: Target,
     scorers: Sequence[Scorer],
+    *,
+    isolate: bool = False,
 ) -> AttemptResult:
     started_at = datetime.now(UTC)
     started_clock = perf_counter()
@@ -84,7 +95,11 @@ def _execute_attempt(
         return (perf_counter() - started_clock) * 1000
 
     try:
-        response: TargetResponse = target.invoke(case)
+        response: TargetResponse = target.invoke(
+            case.model_copy(deep=True) if isolate else case
+        )
+        if isolate:
+            response = response.model_copy(deep=True)
     except Exception as exc:  # noqa: BLE001 - target errors are result data
         return AttemptResult(
             index=index,
@@ -99,7 +114,11 @@ def _execute_attempt(
     errors: list[str] = []
     for scorer in scorers:
         try:
-            scores.append(scorer.score(case, response))
+            score = scorer.score(
+                case.model_copy(deep=True) if isolate else case,
+                response.model_copy(deep=True) if isolate else response,
+            )
+            scores.append(score.model_copy(deep=True) if isolate else score)
         except Exception as exc:  # noqa: BLE001 - scorer errors are result data
             errors.append(_scorer_error(scorer, exc))
 
@@ -163,22 +182,77 @@ def run(
     *,
     attempts: int = 1,
     dataset_path: str = "<inline>",
+    fingerprint_scheme: str = CASE_SCHEME_V1,
+    case_extra_keys: Sequence[str] = (),
+    case_payload_snapshot: str | None = None,
 ) -> RunResult:
     """Run every case and scorer, returning one self-contained result."""
-    selected_cases = list(cases)
+    scheme = validate_case_scheme(fingerprint_scheme)
+    v2 = scheme == CASE_SCHEME_V2
+    if not v2 and (case_extra_keys or case_payload_snapshot is not None):
+        raise ValueError("Definition snapshot options require dataset-cases-v2")
+    if v2 and (type(attempts) is not int or attempts < 1):
+        raise ValueError("attempts must be a positive integer")
+    policy = "hashes_only" if case_payload_snapshot is None else case_payload_snapshot
+    if policy not in ("hashes_only", "full"):
+        raise ValueError("Unknown case payload snapshot policy")
+    selected_cases = [c.model_copy(deep=True) for c in cases] if v2 else list(cases)
     selected_scorers = list(scorers)
     _validate_run(target, selected_scorers, selected_cases, attempts)
+    # Hash before calls even for v1: populated v2 fields must fail in preflight.
+    dataset_hash = hash_cases(selected_cases, scheme=scheme)
+    definitions = (
+        [definition_snapshot(c, case_extra_keys) for c in selected_cases] if v2 else []
+    )
+    config = None
+    versions = None
+    if v2:
+        config = {
+            "organization_schema_version": "run-organization-v1",
+            "dataset_fingerprint_scheme": scheme,
+            "full_dataset_hash": dataset_hash,
+            "selection": {"expression": {}, "case_ids": [c.id for c in selected_cases]},
+            "case_payload_snapshot": policy,
+            "case_payload_snapshot_source": "default"
+            if case_payload_snapshot is None
+            else "run_override",
+            "artifact_capabilities": {
+                "definition_payloads": policy == "full",
+                "external_source_cases_required": policy != "full"
+                or any(
+                    not set(c.extra) <= set(case_extra_keys) for c in selected_cases
+                ),
+            },
+            "metadata_snapshot_policy": {
+                "case_extra_keys": metadata_keys(case_extra_keys),
+                "dataset_extra_keys": [],
+            },
+            "attempts": attempts,
+            "target": target.name,
+            "target_capabilities": sorted(target.capabilities),
+            "scorers": [_scorer_snapshot(s) for s in selected_scorers],
+        }
+        if policy == "full":
+            config["resolved_cases"] = [
+                resolved_case_payload(c, scheme=scheme) for c in selected_cases
+            ]
+        validate_json_data(config)
+        config = deepcopy(config)
+        versions = deepcopy(_model_versions(selected_scorers))
 
     started_at = datetime.now(UTC)
     case_results: list[CaseResult] = []
     try:
-        for case in selected_cases:
+        for position, case in enumerate(selected_cases):
             case_results.append(
                 CaseResult(
                     case_id=case.id,
                     tags=list(case.tags),
+                    definition=definitions[position] if v2 else None,
                     attempts=[
-                        _execute_attempt(index, case, target, selected_scorers)
+                        _execute_attempt(
+                            index, case, target, selected_scorers, isolate=v2
+                        )
                         for index in range(attempts)
                     ],
                 )
@@ -189,17 +263,21 @@ def run(
 
     return RunResult(
         config_path="<inline>",
-        config_snapshot={
+        config_snapshot=config
+        if config is not None
+        else {
             "attempts": attempts,
             "target": target.name,
             "target_capabilities": sorted(target.capabilities),
             "scorers": [_scorer_snapshot(scorer) for scorer in selected_scorers],
         },
-        target_name=target.name,
+        target_name=str(config["target"]) if config is not None else target.name,
         pack_name="none",
         dataset_path=dataset_path,
-        dataset_hash=hash_cases(selected_cases),
-        model_versions=_model_versions(selected_scorers),
+        dataset_hash=dataset_hash,
+        model_versions=versions
+        if versions is not None
+        else _model_versions(selected_scorers),
         started_at=started_at,
         finished_at=datetime.now(UTC),
         cases=case_results,

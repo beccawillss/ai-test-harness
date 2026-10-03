@@ -217,3 +217,28 @@ release gate or statistical significance. “No variation observed in N complete
 judgments” is a bounded observation; “judge calibrated” is not supported. Stable
 fingerprints and per-attempt observations can support future human rating joins,
 but this milestone provides neither annotation nor agreement metrics.
+
+## Versioned v2 suite sources
+
+Milestone 3 suite runs declare `dataset-cases-v2`, `run-organization-v1` and
+`case-definition-snapshot-v1`. Preparation verifies full/selected case hashes,
+definition hashes, copied tags/classification, safe metadata projections, suite
+selection/pins and recorded evaluation context. Complete descriptor snapshots
+reproduce their hash; projected descriptor snapshots explicitly do not. Recorded
+profile judge configuration can supply the original evaluator contract; missing
+configuration still requires explicit translation or the existing unknown/
+reconfigured opt-in. No provider client is introspected.
+
+`case_payload_snapshot="hashes_only"` has no stored input/reference payloads;
+callers must supply the exact verified source cases. `full` adds canonical
+resolved cases excluding authored extra. `reconstruct_source_cases(result)`
+reconstructs source cases only if saved payloads plus projected metadata reproduce
+the complete source hashes. A subset run or omitted metadata can still require
+external cases. Its output must pass ordinary `prepare_replay()` checks before
+replay. Missing or mismatched source material is a preflight error, never an
+invitation to use today's dataset or invoke a judge to repair missing evidence.
+
+Legacy runs lacking a scheme remain v1. Missing legacy definition snapshots and
+source scheme fields remain omitted on serialization. Existing frozen run,
+replay, prompt/evidence and calibration hashes are unchanged; no artifact rewrite
+or human rebinding is required. Older readers must not resave v2 documents.

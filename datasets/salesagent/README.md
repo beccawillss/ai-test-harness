@@ -1,5 +1,9 @@
 # First Sales Agent baseline
 
+`baseline.jsonl` and `semantic.jsonl` are frozen historical 14-case studies.
+Their bytes, loaders, expected hashes and existing replay/calibration bindings
+remain unchanged. Revised expectations belong to separately authored studies.
+
 Fourteen JSONL cases implement the approved scenario matrix. Target input is
 only `input.turns`. References intentionally store evaluator assertions and
 semantic expectations; `extra.provenance` identifies their source. Neither is
@@ -15,8 +19,9 @@ frozen from checkout `097a3774694e4eb8897102dda863b297a9ec9e5b`:
 
 These are dataset provenance, not claims about a running deployment. Runtime
 never reads/imports the Sales Agent repository. Verify deployed fixtures before
-manual evaluation; revise expectations deliberately when catalogue intent
-changes. Canonical hashing detects input, assertion, and provenance changes.
+manual evaluation; author a separate study when changed catalogue intent needs
+revised expectations. Canonical hashing detects input, assertion, and provenance
+changes.
 
 Main baseline: all 14 cases, one attempt each. Variance: replace, STAFF99
 injection, fake price, previous-product follow-up, and conversation; three
@@ -50,3 +55,36 @@ behavior. Run this dataset only through an explicitly chosen semantic profile.
 See `docs/salesagent-semantic.md` for manual opt-in, credentials, error semantics,
 and compatibility requirements. Structured-only and semantic aggregates are
 not interchangeable regression measurements.
+
+## Planned Evaluation Study v1 — not yet authored
+
+The future 50-case study is intended as a fresh holdout-style evaluation, using
+the generic descriptor, taxonomy and suite architecture completed in Milestones
+1–4. The following is a planned file layout only; no study files or cases are
+created by the adoption documentation:
+
+```text
+datasets/salesagent/study-v1/
+  dataset.json
+  cases.jsonl
+  suites/
+    ...
+```
+
+The new study will declare its own dataset identity/version, use
+`dataset-cases-v2` and strict descriptor-aware loading, and own its category,
+tag and risk values. Shopper turns stay in `input`; deterministic assertions
+and semantic expectations stay in `reference`; reviewed provenance belongs in
+`extra`. Logical suite profiles resolve through Sales Agent integration code;
+application validation and evidence projection remain outside generic core.
+
+IDs must be unique within the dataset and stable once published. Reuse across
+studies must be intentional and semantically justified; similar wording or a
+shared ID does not establish equivalence. No reuse of the existing 14-case IDs
+has been decided.
+
+**Outstanding: Design and approve the Sales Agent Evaluation Study v1 coverage
+matrix before authoring cases.** Taxonomy, case distribution, holdout strategy,
+deliberate reuse and suite membership remain undecided. See the
+[study adoption contract](../../docs/salesagent-study-adoption.md) for ownership,
+profile/persistence policies, isolation requirements and future acceptance.

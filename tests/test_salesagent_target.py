@@ -485,3 +485,38 @@ def test_missing_or_malformed_waterproof_rating_is_safe_adapter_error(
     assert attempt.response is None and attempt.scores == []
     assert "malformed contract evidence" in attempt.error
     assert "PRIVATE" not in result.model_dump_json()
+
+
+@pytest.mark.parametrize(
+    "field,value",
+    [
+        ("id", "new-id"),
+        ("reference", {"private": "new expectation"}),
+        ("title", "new title"),
+        ("description", "new prose"),
+        ("category", "opaque family"),
+        ("tags", ["opaque tag"]),
+        ("risk", "opaque risk"),
+        ("extra", {"private": "new secret"}),
+    ],
+)
+def test_v2_taxonomy_and_expectations_do_not_change_http_bytes(field, value):
+    recorded = []
+    for changed in (False, True):
+        fake = FakeHTTP()
+        target = SalesAgentTarget("http://local", transport=httpx.MockTransport(fake))
+        definition = case()
+        if changed:
+            setattr(definition, field, value)
+        result = run(
+            target,
+            [judge()],
+            [definition],
+            attempts=2,
+            fingerprint_scheme="dataset-cases-v2",
+        )
+        assert result.error_rate == 0
+        assert len(fake.sessions) == 2
+        assert list(fake.sessions.values()) == [2, 2]
+        recorded.append([(r.method, str(r.url), r.content) for r in fake.requests])
+    assert recorded[0] == recorded[1]

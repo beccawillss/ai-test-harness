@@ -49,7 +49,12 @@ def _rubric_evidence(value: Any) -> Any:
 
 
 class RubricJudgeScorer(JudgedScorer):
-    """Evaluate a response against a rubric using an injected model call."""
+    """Evaluate a response against a rubric using an injected model call.
+
+    Legacy default evidence includes tags. An excluded-taxonomy suite profile
+    must supply a named, reviewed evidence projection and prove its invariance;
+    profile declarations never silently change this builder or prompt bytes.
+    """
 
     def __init__(
         self,

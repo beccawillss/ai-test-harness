@@ -1,0 +1,12 @@
+{
+  "schema_version": "suite-v1",
+  "id": "all-example-cases",
+  "dataset": {
+    "id": "synthetic-taxonomy-example",
+    "version": "example-v1",
+    "descriptor": "dataset.json"
+  },
+  "selection": {},
+  "attempts": 2,
+  "evaluation_profile": "offline-exact-v1"
+}

@@ -15,10 +15,10 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 from enum import StrEnum
-from typing import Any
+from typing import Any, Literal
 from uuid import uuid4
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 def _utcnow() -> datetime:
@@ -56,6 +56,8 @@ class TestCase(BaseModel):
     structured inputs (e.g. an agent task definition). `reference` holds
     whatever ground truth the scorers need — expected answer, relevant doc
     ids, success criteria — and may be absent for reference-free metrics.
+    `extra` is the arbitrary case metadata container. Classification values
+    are opaque; risk never changes scoring or gating semantics.
     """
 
     id: str
@@ -63,6 +65,29 @@ class TestCase(BaseModel):
     reference: str | dict[str, Any] | None = None
     tags: list[str] = Field(default_factory=list)  # e.g. ["retrieval", "smoke"]
     extra: dict[str, Any] = Field(default_factory=dict)
+    # Omit only new null fields, preserving every legacy default/null and dump.
+    title: str | None = Field(default=None, strict=True, exclude_if=lambda v: v is None)
+    description: str | None = Field(
+        default=None, strict=True, exclude_if=lambda v: v is None
+    )
+    category: str | None = Field(
+        default=None, strict=True, exclude_if=lambda v: v is None
+    )
+    risk: str | None = Field(default=None, strict=True, exclude_if=lambda v: v is None)
+
+    @field_validator("title", "category", "risk")
+    @classmethod
+    def nonblank_definition_text(cls, value: str | None) -> str | None:
+        if value is not None and not value.strip():
+            raise ValueError("Definition text must not be blank")
+        return value
+
+    @field_validator("category", "risk")
+    @classmethod
+    def taxonomy_whitespace(cls, value: str | None) -> str | None:
+        if value is not None and value != value.strip():
+            raise ValueError("Taxonomy values must not have boundary whitespace")
+        return value
 
 
 # ---------------------------------------------------------------------------
@@ -136,12 +161,51 @@ class AttemptResult(BaseModel):
     duration_ms: float | None = None
 
 
+class CaseDefinitionSnapshot(BaseModel):
+    """Execution-time classification; hashes bind more than projected metadata."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
+
+    schema_version: Literal["case-definition-snapshot-v1"] = (
+        "case-definition-snapshot-v1"
+    )
+    fingerprint_scheme: Literal["dataset-cases-v2"] = "dataset-cases-v2"
+    definition_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    title: str | None = None
+    description: str | None = None
+    category: str | None = None
+    risk: str | None = None
+    extra: dict[str, Any] = Field(default_factory=dict)
+
+    @field_validator("title", "category", "risk")
+    @classmethod
+    def definition_text(cls, value: str | None) -> str | None:
+        return TestCase.nonblank_definition_text(value)
+
+    @field_validator("category", "risk")
+    @classmethod
+    def taxonomy_text(cls, value: str | None) -> str | None:
+        return TestCase.taxonomy_whitespace(value)
+
+    @field_validator("extra", mode="before")
+    @classmethod
+    def finite_metadata(cls, value: Any) -> Any:
+        # Local import avoids a models/fingerprint module import cycle.
+        from harness.core.case_fingerprints import validate_json_data
+
+        validate_json_data(value)
+        return value
+
+
 class CaseResult(BaseModel):
     """All attempts for one case, plus derived stability stats."""
 
     case_id: str
     tags: list[str] = Field(default_factory=list)
     attempts: list[AttemptResult] = Field(default_factory=list)
+    definition: CaseDefinitionSnapshot | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
 
     @property
     def pass_rate(self) -> float | None:

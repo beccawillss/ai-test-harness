@@ -1,0 +1,10 @@
+{
+  "schema_version": "dataset-descriptor-v1",
+  "id": "example-evaluation",
+  "version": "study-v1",
+  "title": "Synthetic organization example",
+  "description": "Definition-only fixture; no target or judge required.",
+  "cases": "cases.jsonl",
+  "extra": {"origin": {"version": 1, "notes": [null, true, "authored"]}},
+  "fingerprint_scheme": "dataset-cases-v2"
+}

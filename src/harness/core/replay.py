@@ -15,6 +15,16 @@ from uuid import uuid4
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from harness.core.case_fingerprints import (
+    CASE_SCHEME_V1,
+    CASE_SCHEME_V2,
+    CaseFingerprintScheme,
+    hash_case_definition,
+    resolved_case_payload,
+    validate_case_scheme,
+    validate_json_data,
+    validate_v2_case,
+)
 from harness.core.dataset import hash_cases
 from harness.core.fingerprints import (
     CANONICAL_VERSION,
@@ -23,6 +33,7 @@ from harness.core.fingerprints import (
     text_hash,
 )
 from harness.core.models import RunResult, Score, ScorerKind, TestCase, Verdict
+from harness.core.snapshots import definition_snapshot, metadata_keys
 from harness.judges.base import JudgeObservation, JudgeScoringError
 from harness.scorers.base import JudgedScorer, PreparedJudgeInput
 
@@ -151,6 +162,9 @@ class SourceProvenance(_Frozen):
     source_model_versions: tuple[tuple[str, str], ...] = ()
     evidence_schema_version: str | None = None
     observed_judge_model: str | None = None
+    dataset_fingerprint_scheme: CaseFingerprintScheme | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
 
     @field_validator("database")
     @classmethod
@@ -285,6 +299,164 @@ def _check_projected_fields(value: Any) -> None:
             _check_projected_fields(child)
 
 
+def _verify_v2_definitions(source: RunResult, cases: Sequence[TestCase]) -> None:
+    """Verify stored classification and policy against supplied full source cases."""
+    snapshot = source.config_snapshot
+    if snapshot.get("organization_schema_version") != "run-organization-v1":
+        raise ReplayValidationError("Unknown or missing run organization schema")
+    policy = snapshot.get("metadata_snapshot_policy")
+    if not isinstance(policy, dict) or set(policy) != {
+        "case_extra_keys",
+        "dataset_extra_keys",
+    }:
+        raise ReplayValidationError("Missing or invalid metadata snapshot policy")
+    try:
+        keys = metadata_keys(policy["case_extra_keys"])
+        metadata_keys(policy["dataset_extra_keys"])
+        by_id = {case.id: case for case in cases}
+        for stored in source.cases:
+            if stored.tags != by_id[stored.case_id].tags:
+                raise ReplayValidationError("Stored tags differ")
+            expected = definition_snapshot(by_id[stored.case_id], keys)
+            if stored.definition is None or canonical_json(
+                stored.definition.model_dump(mode="json")
+            ) != canonical_json(expected.model_dump(mode="json")):
+                raise ReplayValidationError("Stored definition snapshot differs")
+        validate_json_data(snapshot)
+    except (ValueError, TypeError, KeyError):
+        raise ReplayValidationError(
+            "Invalid v2 definition snapshot or metadata policy"
+        ) from None
+    if "suite" in snapshot:
+        # Local import avoids a dependency cycle with suite profile configuration.
+        from harness.core.dataset import DatasetDescriptor
+        from harness.core.selection import select_cases
+        from harness.core.suites import Suite
+
+        try:
+            suite = Suite.model_validate(snapshot["suite"])
+            descriptor = DatasetDescriptor.model_validate(
+                snapshot["dataset_descriptor"]
+            )
+            if fingerprint(suite.model_dump(mode="json")) != snapshot["suite_hash"]:
+                raise ValueError("suite")
+            if (suite.dataset.id, suite.dataset.version) != (
+                descriptor.id,
+                descriptor.version,
+            ):
+                raise ValueError("identity")
+            if suite.dataset.expected_case_fingerprint not in (
+                None,
+                snapshot["full_dataset_hash"],
+            ):
+                raise ValueError("case pin")
+            descriptor_hash = snapshot["dataset_descriptor_hash"]
+            if not isinstance(descriptor_hash, str) or not re.fullmatch(
+                r"[0-9a-f]{64}", descriptor_hash
+            ):
+                raise ValueError("descriptor hash")
+            if suite.dataset.expected_descriptor_fingerprint not in (
+                None,
+                descriptor_hash,
+            ):
+                raise ValueError("descriptor pin")
+            complete = snapshot["dataset_descriptor_snapshot_complete"]
+            if type(complete) is not bool or (
+                complete and descriptor.descriptor_hash != descriptor_hash
+            ):
+                raise ValueError("descriptor snapshot")
+            if not set(descriptor.extra) <= set(policy["dataset_extra_keys"]):
+                raise ValueError("descriptor projection")
+            if (
+                suite.selection.model_dump(mode="json")
+                != snapshot["selection"]["expression"]
+            ):
+                raise ValueError("selection expression")
+            if [c.id for c in select_cases(cases, suite.selection)] != [
+                c.case_id for c in source.cases
+            ]:
+                raise ValueError("membership")
+            overrides = snapshot["overrides"]
+            if set(overrides) - {
+                "attempts",
+                "evaluation_profile",
+                "case_payload_snapshot",
+            }:
+                raise ValueError("overrides")
+            if overrides.get("attempts", suite.attempts) != snapshot["attempts"]:
+                raise ValueError("attempt policy")
+            profile = snapshot["evaluation_profile"]
+            expected_profile = overrides.get(
+                "evaluation_profile", suite.evaluation_profile
+            )
+            if expected_profile is not None and expected_profile != profile["id"]:
+                raise ValueError("profile")
+            if profile["taxonomy_evidence"] not in ("excluded", "explicitly_included"):
+                raise ValueError("taxonomy contract")
+            expected_policy = overrides.get(
+                "case_payload_snapshot",
+                profile["case_payload_snapshot"] or "hashes_only",
+            )
+            if expected_policy != snapshot["case_payload_snapshot"] or (
+                profile["requires_full_payload"] and expected_policy != "full"
+            ):
+                raise ValueError("payload policy")
+        except (ValueError, TypeError, KeyError):
+            raise ReplayValidationError(
+                "V2 suite execution context is inconsistent"
+            ) from None
+
+
+def reconstruct_source_cases(source: RunResult) -> list[TestCase]:
+    """Reconstruct only when full payloads plus projected metadata verify exactly.
+
+    A selected subset cannot reconstruct unexecuted source cases. Missing extra
+    cannot be guessed. In either situation callers must supply verified source
+    material to prepare_replay(), even when input/reference payloads are present.
+    """
+    snapshot = source.config_snapshot
+    if (
+        snapshot.get("dataset_fingerprint_scheme") != CASE_SCHEME_V2
+        or snapshot.get("case_payload_snapshot") != "full"
+    ):
+        raise ReplayValidationError(
+            "Reconstruction requires full v2 payloads; supply verified source cases"
+        )
+    try:
+        payloads = snapshot["resolved_cases"]
+        if not isinstance(payloads, list) or len(payloads) != len(source.cases):
+            raise ValueError("payloads")
+        cases = []
+        for payload, stored in zip(payloads, source.cases, strict=True):
+            if (
+                stored.definition is None
+                or "extra" in payload
+                or payload["id"] != stored.case_id
+            ):
+                raise ValueError("definition")
+            case = TestCase.model_validate(
+                {**payload, "extra": stored.definition.extra},
+                strict=True,
+                extra="forbid",
+            ).model_copy(deep=True)
+            if canonical_json(payload) != canonical_json(
+                resolved_case_payload(case, scheme=CASE_SCHEME_V2)
+            ):
+                raise ValueError("noncanonical payload")
+            cases.append(case)
+        if (
+            hash_cases(cases, scheme=CASE_SCHEME_V2) != source.dataset_hash
+            or source.dataset_hash != snapshot["full_dataset_hash"]
+        ):
+            raise ValueError("missing source material")
+        _verify_v2_definitions(source, cases)
+        return cases
+    except (ValueError, TypeError, KeyError):
+        raise ReplayValidationError(
+            "Full artifact lacks verified complete source material; supply source cases"
+        ) from None
+
+
 def prepare_replay(
     source: RunResult,
     cases: Sequence[TestCase],
@@ -320,23 +492,69 @@ def prepare_replay(
         raise ReplayValidationError("Source selection is absent from dataset")
     selected = [by_id[i] for i in ids]
     snapshot = source.config_snapshot
-    if hash_cases(selected) != source.dataset_hash:
+    try:
+        scheme = validate_case_scheme(
+            snapshot.get("dataset_fingerprint_scheme", CASE_SCHEME_V1)
+        )
+        selected_hash = hash_cases(selected, scheme=scheme)
+        full_case_hash = (
+            hash_cases(cases, scheme=scheme)
+            if snapshot.get("full_dataset_hash") is not None or scheme == CASE_SCHEME_V2
+            else None
+        )
+        expected_resolved = [resolved_case_payload(c, scheme=scheme) for c in selected]
+    except (ValueError, TypeError):
+        raise ReplayValidationError(
+            "Invalid source case fingerprint scheme or definitions"
+        ) from None
+    if selected_hash != source.dataset_hash:
         raise ReplayValidationError("Source dataset fingerprint differs")
     full_hash = snapshot.get("full_dataset_hash")
-    if full_hash is not None and full_hash != hash_cases(cases):
+    if full_hash is not None and full_hash != full_case_hash:
         raise ReplayValidationError("Full dataset fingerprint differs")
+    if scheme == CASE_SCHEME_V2:
+        policy = snapshot.get("case_payload_snapshot")
+        if policy not in ("hashes_only", "full"):
+            raise ReplayValidationError(
+                "V2 source requires an explicit case payload policy"
+            )
+        if full_hash is None or "selection" not in snapshot:
+            raise ReplayValidationError(
+                "V2 source requires full fingerprint and selection"
+            )
+        if policy == "full" and not isinstance(snapshot.get("resolved_cases"), list):
+            raise ReplayValidationError("Full case payload snapshot is missing")
+        if policy == "hashes_only" and "resolved_cases" in snapshot:
+            raise ReplayValidationError(
+                "Hash-only source must not contain case payloads"
+            )
+    elif "case_payload_snapshot" in snapshot:
+        raise ReplayValidationError(
+            "Case payload policy requires an explicit v2 scheme"
+        )
     if "selection" in snapshot and (
         not isinstance(snapshot["selection"], dict)
         or snapshot["selection"].get("case_ids") != ids
     ):
         raise ReplayValidationError("Stored selection differs")
     resolved = snapshot.get("resolved_cases")
-    if resolved is not None and resolved != [
-        c.model_dump(mode="json", exclude={"extra"}) for c in selected
-    ]:
+    if resolved is not None and (
+        canonical_json(resolved) != canonical_json(expected_resolved)
+        if scheme == CASE_SCHEME_V2
+        else resolved != expected_resolved
+    ):
         raise ReplayValidationError("Stored cases differ from verified dataset")
     if any(c.tags != by_id[c.case_id].tags for c in source.cases):
         raise ReplayValidationError("Stored tags differ from verified dataset")
+    if scheme == CASE_SCHEME_V2:
+        _verify_v2_definitions(source, cases)
+    elif (
+        any(c.definition is not None for c in source.cases)
+        or "organization_schema_version" in snapshot
+    ):
+        raise ReplayValidationError(
+            "V2 definition context requires an explicit v2 scheme"
+        )
     matches = [c for c in source.cases if c.case_id == case_id]
     if not matches:
         raise ReplayValidationError("Source case not found")
@@ -362,6 +580,30 @@ def prepare_replay(
         raise ReplayValidationError("Malformed source scorer configuration")
     _unique([s["name"] for s in source_scorers], "source scorer names")
     recorded = next((s for s in source_scorers if s["name"] == scorer.name), None)
+    if scheme == CASE_SCHEME_V2 and "evaluation_profile" in snapshot:
+        try:
+            entries = snapshot["evaluation_profile"]["scorers"]
+            matching = [e for e in entries if e["observed"]["name"] == scorer.name]
+            if len(matching) != 1:
+                raise ValueError("profile scorer")
+            entry = matching[0]
+            if recorded is None or any(
+                canonical_json(recorded[k]) != canonical_json(entry["observed"][k])
+                for k in recorded.keys() & entry["observed"].keys()
+            ):
+                raise ValueError("observed configuration")
+            if entry["judge"] is not None:
+                saved_evaluator = EvaluatorConfiguration(
+                    scorer_json=canonical_json(entry["observed"]),
+                    judge=JudgeConfiguration.model_validate(entry["judge"]),
+                )
+                if source_evaluator is not None and source_evaluator != saved_evaluator:
+                    raise ValueError("source evaluator")
+                source_evaluator = saved_evaluator
+        except (ValueError, TypeError, KeyError):
+            raise ReplayValidationError(
+                "V2 recorded evaluator context is inconsistent"
+            ) from None
     if source_evaluator is not None:
         translated = json.loads(source_evaluator.scorer_json)
         if recorded is None or any(
@@ -401,7 +643,8 @@ def prepare_replay(
     response = attempt.response.model_copy(deep=True)
     case = by_id[case_id].model_copy(deep=True)
     response_hash = fingerprint(response.model_dump(mode="json"))
-    case_hash = fingerprint(case.model_dump(mode="json"))
+    case_hash = hash_case_definition(case, scheme=scheme)
+    mutation_hash = fingerprint(case.model_dump(mode="json"))
     try:
         prepared = scorer.prepare(case, response)
         if prepared.evidence_json is not None:
@@ -410,10 +653,16 @@ def prepare_replay(
         raise ReplayValidationError(
             "Source evidence cannot be prepared by this scorer"
         ) from None
-    if (
-        fingerprint(response.model_dump(mode="json")) != response_hash
-        or fingerprint(case.model_dump(mode="json")) != case_hash
-    ):
+    try:
+        if scheme == CASE_SCHEME_V2:
+            validate_v2_case(case)
+        mutated = (
+            fingerprint(response.model_dump(mode="json")) != response_hash
+            or fingerprint(case.model_dump(mode="json")) != mutation_hash
+        )
+    except (ValueError, TypeError):
+        mutated = True
+    if mutated:
         raise ReplayValidationError("Evidence builder mutated replay inputs")
     observed = [
         s.extra.get("judge", {}).get("observed_model")
@@ -437,6 +686,7 @@ def prepare_replay(
         source_model_versions=tuple(sorted(source.model_versions.items())),
         evidence_schema_version=snapshot.get("evidence_schema_version"),
         observed_judge_model=observed[0] if len(observed) == 1 else None,
+        dataset_fingerprint_scheme=scheme if scheme == CASE_SCHEME_V2 else None,
     )
     return PreparedReplay(
         source=provenance,

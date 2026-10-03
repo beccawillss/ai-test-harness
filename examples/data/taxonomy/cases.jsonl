@@ -1,0 +1,4 @@
+{"id":"case-a","input":{"text":"alpha"},"reference":"alpha","category":"family-a","tags":["quick","shared"],"risk":"band-a"}
+{"id":"case-b","input":{"text":" beta "},"reference":"beta","category":"family-a","tags":["shared"],"risk":"band-b"}
+{"id":"case-c","input":{"simulate_timeout":true},"reference":"gamma","category":"family-b","tags":["quick"],"risk":"band-a"}
+{"id":"case-d","input":{"text":"delta"},"reference":null,"tags":[]}
