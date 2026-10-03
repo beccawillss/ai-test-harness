@@ -51,7 +51,7 @@ def validate_v2_case(case: TestCase) -> None:
     values = {
         key: getattr(case, key) for key in (*LEGACY_CASE_FIELDS, *DEFINITION_FIELDS)
     }
-    _finite_json(values, set())
+    validate_json_data(values)
     # Validate a dictionary, not an already constructed model (which Pydantic
     # otherwise need not revalidate). This also rechecks the new-field rules.
     try:
@@ -65,6 +65,11 @@ def validate_v2_case(case: TestCase) -> None:
             )
     if len(set(case.tags)) != len(case.tags):
         raise ValueError("V2 tags must be unique")
+
+
+def validate_json_data(value: Any) -> None:
+    """Validate authored JSON before serialization can normalize Python values."""
+    _finite_json(value, set())
 
 
 def case_payload(case: TestCase, *, scheme: str) -> dict[str, Any]:

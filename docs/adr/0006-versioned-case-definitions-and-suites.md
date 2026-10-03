@@ -1,9 +1,10 @@
 # ADR 0006: Versioned case definitions and taxonomy boundaries
 
 Status: accepted for the taxonomy ExecPlan; fingerprint/classification foundation
-implemented in Milestone 1 (2026-10-03). Dataset descriptors, selectors, suites,
-result snapshots, and grouped reports remain future milestones, not shipped
-features. See [the ExecPlan](../plans/test-taxonomy-datasets-suites.md).
+implemented in Milestone 1 (2026-10-03). Descriptor loading and pure selection/
+preview are implemented in Milestone 2. Suites, result snapshots, and grouped
+reports remain future milestones, not shipped features. See
+[the ExecPlan](../plans/test-taxonomy-datasets-suites.md).
 
 ## Context
 
@@ -89,10 +90,34 @@ before model edits; tests pin their bytes, compact JSON, hashes, prompt/evidence
 observation joins, and calibration bindings. Local historical artifacts provide
 additional read-only acceptance, not private CI dependencies.
 
+## Descriptor loading and selection (Milestone 2)
+
+`DatasetDescriptor` declares the required schema/version, stable ID, authored
+version, relative case binding and v2 fingerprint scheme, with optional title,
+description and arbitrary finite JSON `extra`. Its fingerprint is the canonical
+hash of normalized authored fields, including its schema marker and explicit
+defaults; absolute filesystem paths and derived hashes do not participate.
+`LoadedDataset` retains both descriptor and full ordered case fingerprints.
+The new strict loader is separate from the unchanged legacy `load_cases()`.
+
+Strict loading rejects duplicate JSON keys/non-finite numbers, unknown fields,
+duplicate case IDs, coercions and invalid identity whitespace. It validates all
+rows before returning source material for selection. Binding checks disallow
+URLs/absolute paths/parent traversal and resolved symlink escapes; nested local
+files work independently of cwd. Errors identify source locations without
+copying whole case bodies.
+
+`CaseSelection` implements exact deterministic intersections with original
+dataset order and explicit any/all tag matching. `preview_selection()` rechecks
+the entire in-memory dataset and its fingerprints, then returns only identity,
+hashes, selection, ordered IDs, counts and membership eligibility. Neither path
+imports or constructs targets, scorers, judges or the runner. See the
+[authoring guide](../test-taxonomy-and-suites.md) for examples and exact semantics.
+
 ## Subsequent milestones and limits
 
-Descriptors will distinguish authored version, descriptor fingerprint, full
-case fingerprint, and executed subset fingerprint. Suite pins will explicitly
+Descriptors distinguish authored version, descriptor fingerprint, full case
+fingerprint, and selected subset fingerprint. Suite pins will explicitly
 name expected case and descriptor fingerprints. Selection will precede the
 runner; scorer selection belongs to suite/run configuration, never concrete
 classes on TestCase. New runs will snapshot classification and safe metadata

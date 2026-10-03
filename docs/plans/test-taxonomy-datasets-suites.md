@@ -3,14 +3,16 @@
 This ExecPlan was created on 2026-10-02 and is **approved with the four
 amendments incorporated on 2026-10-03**: strict v2 whitespace/direct validation,
 explicit suite fingerprint types, explicit case payload persistence policy,
-and deferred cross-study ID reuse decisions. The subsequent 2026-10-03 request
-authorizes **Milestone 1 only**, now completed and validated below. Milestones
-2–5 remain unstarted; do not begin Milestone 2 without explicit approval.
+and deferred cross-study ID reuse decisions. Subsequent requests authorized
+Milestones 1 and 2 individually; **both are now completed and validated below**.
+Milestones 3–5 remain unstarted; do not begin Milestone 3 without explicit approval.
 Frozen datasets, stored runs, replay artifacts, and calibration artifacts are
 unchanged. No live targets or judges were invoked.
 
 Working branch: `feat/test-taxonomy-suites`. Integration branch:
-`codex-evaluation`. Inspected HEAD: `9198ad26d84576a319537909f146c5121412be99`.
+`codex-evaluation`. Planning HEAD: `9198ad26d84576a319537909f146c5121412be99`.
+Milestone 2 starting HEAD: `a3d9d96719d87be8b6ca30bcd387e61f8bc5aa67`
+(committed Milestone 1; clean worktree verified before Milestone 2).
 The worktree was clean before this document was added. Continue this coherent
 slice on the existing feature branch; do not merge, rebase, delete branches,
 or rewrite history. Check for intervening repository changes before starting
@@ -69,7 +71,8 @@ coverage-matrix approval and completed, validated generic Milestones 1–4.
   incorporated in the preceding document-only revision.
 - [x] Milestone 1: compatibility fixtures, canonical schemes, TestCase fields
   (2026-10-03; explicit Milestone 1 implementation authorization).
-- [ ] Milestone 2: descriptor, strict loading, pure selection and preview.
+- [x] Milestone 2: descriptor, strict loading, pure selection and preview
+  (2026-10-03; explicit Milestone 2 implementation authorization).
 - [ ] Milestone 3: suite execution and immutable result snapshots.
 - [ ] Milestone 4: grouped reporting and comparison context.
 - [ ] Milestone 5: study layout and adoption documentation only.
@@ -79,7 +82,7 @@ coverage-matrix approval and completed, validated generic Milestones 1–4.
 ## Current boundaries and compatibility hazards
 
 This section records pre-implementation findings at the inspected revision.
-The Milestone 1 implementation record below describes the completed changes.
+The milestone implementation records below describe the completed changes.
 
 `src/harness/core/models.py::TestCase` currently has `id`, `input`, `reference`,
 `tags`, and `extra`. It uses permissive Pydantic defaults: unknown top-level
@@ -1239,6 +1242,131 @@ avoid beginning another milestone. The Target protocol and legacy rubric tags
 behavior remain unchanged architectural debts. Hash-only replay still requires
 verified external case material; no input/reference is reconstructed from hashes.
 
-No further Milestone 1 work is outstanding. **Stop here. Milestone 2 requires
-explicit user approval.** No descriptor-aware loader, selector, suite, grouping,
-50-case study material, or UI has been started.
+At Milestone 1 completion, work stopped pending explicit Milestone 2 approval.
+The subsequent authorization and implementation are recorded below.
+
+## Milestone 2 implementation and validation record (2026-10-03)
+
+Implemented only descriptor loading, strict authoring validation, deterministic
+selection and definition-only preview after explicit user authorization.
+Re-read AGENTS.md and this amended plan. Confirmed Milestone 1 was committed as
+`a3d9d96719d87be8b6ca30bcd387e61f8bc5aa67` on `feat/test-taxonomy-suites`, with
+no subsequent commits or worktree changes before implementation. The pre-change
+dataset/fingerprint checks passed (116 tests). No commits, merges or history
+changes were performed during Milestone 2.
+
+### Implemented APIs and decisions
+
+- `DatasetDescriptor` requires `schema_version="dataset-descriptor-v1"`, `id`,
+  authored `version`, relative `cases`, and `fingerprint_scheme="dataset-cases-v2"`.
+  Optional title/description default to null; `extra` defaults to an empty object.
+  Its `descriptor_hash` property fingerprints the normalized authored dictionary,
+  including the schema marker and defaults, never derived hashes or absolute paths.
+- `LoadedDataset` contains the descriptor, ordered ordinary TestCases, resolved
+  `descriptor_path`/`cases_path`, `full_dataset_hash` and `descriptor_hash`.
+  It validates both hashes on construction and JSON round-trip. Complete source
+  validation precedes selection, including rows that filters would exclude.
+- `load_dataset()` strictly parses descriptor JSON and every nonblank JSONL row.
+  It rejects unknown fields, duplicate JSON keys, non-finite numbers including
+  overflow, type coercions, invalid identity whitespace, duplicate/blank tags,
+  duplicate IDs, and non-JSON metadata. Duplicate IDs report both source lines;
+  diagnostics do not echo whole inputs. Prose and legitimate internal whitespace
+  retain their values. Case-file binding is relative to the descriptor directory;
+  URLs, absolute/Windows paths, backslashes, parent traversal and symlink escapes
+  are rejected. New JSONL parsing uses physical newline boundaries so literal
+  Unicode line-separator characters inside strings remain valid data.
+- `CaseSelection` has optional `case_ids`, `categories`, `tags_any`, `tags_all`,
+  and `risks` arrays. Omitted fields impose no constraint; supplied null/empty,
+  duplicate, non-string, blank or boundary-whitespace values are errors.
+  `select_cases()` implements the approved truth table without mutations: AND
+  across fields, OR within IDs/categories/risks, any/all tags, exact comparison,
+  original dataset order, and unknown explicit IDs rejected before filtering.
+- `preview_selection()` returns serializable `SelectionPreview` identity,
+  descriptor/full/selected fingerprints and scheme names, authored selection,
+  ordered IDs, counts, `executable` and a reason for empty membership. It carries
+  no case payload bodies. Empty selection is valid with `executable=false`;
+  nonempty membership is not target/scorer preflight or execution authorization.
+- Nested loaded case/metadata objects remain mutable. Preview revalidates all
+  content and both fingerprints, including unselected cases, to reject drift.
+  Pure `select_cases()` accepts already validated sequences, as designed.
+  Preview copies selector data; later selector-list edits do not alter its result.
+- Reused the existing finite JSON validator through `validate_json_data()`;
+  neither fingerprint algorithm changed. The source of legacy `load_cases()`
+  and `hash_cases()` is exactly unchanged from Milestone 1. No runner, replay,
+  calibration, target, scorer or result model implementation changed.
+- Added synthetic descriptor/JSONL fixtures, authoring/selection tests, the
+  current-feature guide and README link, and updated ADR 0006. No application
+  vocabulary or category-to-scorer mapping was introduced.
+
+Example preview for `categories=["family-a"]`, `tags_any=["quick"]` against
+`tests/fixtures/taxonomy/organization/dataset.json`:
+
+```json
+{
+  "dataset_id": "example-evaluation",
+  "dataset_version": "study-v1",
+  "descriptor_hash": "6cc4abcb061c3211ead78a5f5006afc0d61846fdd23b070b84fd934ab788ff92",
+  "descriptor_fingerprint_scheme": "dataset-descriptor-v1",
+  "full_dataset_hash": "878d6f8fb3fb350c3c533380bdc632190e2f9221c50806fa6628c97494712b84",
+  "selected_dataset_hash": "193d0f8e4bb54700c4f371fc147d489575703dc2a236a20c4600ab8e871e57ad",
+  "case_fingerprint_scheme": "dataset-cases-v2",
+  "selection": {"categories": ["family-a"], "tags_any": ["quick"]},
+  "case_ids": ["case-a"],
+  "total_case_count": 3,
+  "selected_case_count": 1,
+  "executable": true,
+  "reason": null
+}
+```
+
+### Validation and compatibility results
+
+Required Milestone 2 command:
+
+```sh
+.venv/bin/python -m pytest tests/test_dataset_descriptor.py tests/test_selection.py tests/test_dataset.py tests/test_case_fingerprints.py
+```
+
+Result: **300 passed** (100 descriptor tests, 84 selector/preview tests, 116
+existing dataset/fingerprint tests). Includes all selection examples, invalid
+unselected rows, mutation checks, Unicode values, unrelated opaque taxonomies,
+round-tripping, relative bindings, and an isolated import/preview check proving
+execution modules are not imported or constructed.
+
+Additional focused offline compatibility and static checks:
+
+```sh
+.venv/bin/python -m pytest tests/test_replay.py tests/test_calibration.py tests/test_calibration_io.py tests/test_models.py
+.venv/bin/ruff check src tests examples
+.venv/bin/mypy src
+git diff --check
+```
+
+Results: **249 passed**; Ruff passed; mypy passed for **30 source files**;
+diff whitespace check passed. All 549 tests across the two final pytest groups
+passed. No full-suite rerun was needed for this isolated authoring/selection
+slice after these checks. No live target, judge or network calls were made.
+
+Read-only acceptance rechecked all **23** inventoried existing artifact, dataset
+and legacy fixture files: byte hashes unchanged. Both frozen dataset byte hashes
+and v1 case hashes still exactly match the protection table. The pinned synthetic
+legacy fixture retains SHA-256
+`5818ce99cec46d4ec82095b7a6e9eb11685a8537248cff8eae2419e95dd49e4b`.
+No historical artifact or human binding was rewritten.
+
+### Deviations, limitations and stop point
+
+No material deviation from the approved plan. Symlink containment/backslash
+rejection make the specified portable relative case binding explicit; neither
+changes the legacy loader. Descriptor fingerprints use the existing canonical
+fingerprint primitive over normalized fields with `schema_version` as the
+representation marker. These routine details are documented in ADR 0006.
+
+The current runner still supports v1 only; v2 execution and persistence remain
+Milestone 3. These previews concern membership only, do not validate profile
+references/capabilities, and do not persist full input/reference payloads or run
+results. Full snapshot policies and suite fingerprint pins remain future work.
+
+**Milestone 2 is complete. Stop before Milestone 3 until explicitly approved.**
+No suites, runner v2 options, persistence snapshots, grouping/comparison changes,
+study cases, UI or Target protocol changes were implemented.
