@@ -27,6 +27,7 @@ from harness.core.models import (
 )
 from harness.core.snapshots import definition_snapshot, metadata_keys
 from harness.scorers.base import Scorer
+from harness.scorers.output_contracts import ScoreOutputContract
 from harness.targets.base import CloseableTarget, Target, check_pack_compatibility
 
 
@@ -163,6 +164,9 @@ def _scorer_snapshot(scorer: Scorer) -> dict[str, object]:
     evidence_settings = getattr(scorer, "evidence_settings", None)
     if evidence_settings:
         snapshot["evidence_settings"] = evidence_settings
+    output = getattr(scorer, "output_validation", None)
+    if isinstance(output, ScoreOutputContract):
+        snapshot["output_validation"] = output.model_dump(mode="json")
     return snapshot
 
 

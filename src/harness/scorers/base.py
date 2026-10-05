@@ -19,7 +19,8 @@ from pydantic import BaseModel, ConfigDict
 
 from harness.core.fingerprints import canonical_json, text_hash
 from harness.core.models import Score, ScorerKind, TargetResponse, TestCase
-from harness.judges.base import JudgeReply, JudgeScoringError
+from harness.judges.base import JudgeObservation, JudgeReply, JudgeScoringError
+from harness.scorers.output_contracts import ScoreOutputContract
 
 
 class PreparedJudgeInput(BaseModel):
@@ -111,6 +112,7 @@ class JudgedScorer:
     judgment_version: str | None = None
     rubric_version: str | None = None
     projection_reviewed: bool = False
+    output_validation: ScoreOutputContract | None = None
 
     @property
     def evidence_settings(self) -> dict[str, str | int]:
@@ -119,7 +121,7 @@ class JudgedScorer:
     @property
     def preparation_configuration(self) -> dict[str, Any]:
         """Explicit authored configuration; never inspect a judge's attributes."""
-        return {
+        configuration: dict[str, Any] = {
             "name": self.name,
             "kind": self.kind.value,
             "requires": sorted(self.requires),
@@ -132,6 +134,11 @@ class JudgedScorer:
             "judgment_version": self.judgment_version,
             "evidence_settings": self.evidence_settings,
         }
+        if self.output_validation is not None:
+            configuration["output_validation"] = self.output_validation.model_dump(
+                mode="json"
+            )
+        return configuration
 
     def __init__(
         self, judge_fn: Callable[[str], str | JudgeReply], judge_model: str
@@ -203,10 +210,19 @@ class JudgedScorer:
             )
             try:
                 value, rationale = self.parse_judgement(raw.text)
+                if self.output_validation is not None:
+                    self.output_validation.check_score(value)
             except Exception:  # noqa: BLE001 - parser failures retain safe observations only
                 raise JudgeScoringError(raw.observation) from None
         else:
-            value, rationale = self.parse_judgement(raw)
+            try:
+                value, rationale = self.parse_judgement(raw)
+                if self.output_validation is not None:
+                    self.output_validation.check_score(value)
+            except ValueError:
+                if self.output_validation is not None:
+                    raise JudgeScoringError(JudgeObservation()) from None
+                raise
         return Score(
             name=self.name,
             kind=ScorerKind.JUDGED,

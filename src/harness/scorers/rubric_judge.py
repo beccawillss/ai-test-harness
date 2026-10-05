@@ -11,6 +11,7 @@ from harness.core.fingerprints import canonical_json
 from harness.core.models import TargetResponse, TestCase
 from harness.judges.base import JudgeReply
 from harness.scorers.base import JudgedScorer, PreparedJudgeInput
+from harness.scorers.output_contracts import ScoreOutputContract
 
 
 def _rubric_evidence(value: Any) -> Any:
@@ -71,6 +72,7 @@ class RubricJudgeScorer(JudgedScorer):
         rubric_version: str | None = None,
         projection_reviewed: bool = False,
         evidence_settings: dict[str, str | int] | None = None,
+        output_validation: ScoreOutputContract | None = None,
     ) -> None:
         if not name.strip():
             raise ValueError("Rubric judge name must not be empty.")
@@ -93,6 +95,11 @@ class RubricJudgeScorer(JudgedScorer):
         self.prompt_version = "rubric-untrusted-json-v1"
         self.judgment_version = "score-reason-v1"
         self._evidence_settings = dict(evidence_settings or {})
+        self.output_validation = (
+            ScoreOutputContract.model_validate_json(output_validation.model_dump_json())
+            if output_validation is not None
+            else None
+        )
 
     @property
     def evidence_settings(self) -> dict[str, str | int]:
@@ -200,6 +207,8 @@ class RubricJudgeScorer(JudgedScorer):
             raise ValueError("Judge output 'reason' must be a non-empty string.")
         if set(parsed) != {"score", "reason"}:
             raise ValueError("Judge output must contain only score and reason.")
+        if self.output_validation is not None:
+            self.output_validation.check_score(score)
         return score, reason.strip()
 
 
