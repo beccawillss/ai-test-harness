@@ -1,222 +1,266 @@
-# Sales Agent Evaluation Study v1 adoption contract
+# Sales Agent Evaluation Study v1 integration
 
-The 50-case study is **planned, not authored**. Generic taxonomy, descriptors,
-suites, snapshots and reporting are implemented through Milestones 1–4. This
-Milestone 5 document specifies future integration contracts only; it adds no
-study cases, profile factory, live entry point, scorer or rubric change.
+The study is **approved in methodology, not authored or run**. Readiness
+Milestones 1–2 implement the generic prospective workflow and the Study v1
+integration boundary. They do not supply the 50 actual case definitions, a
+live deployment freeze, human ratings or study findings. Authoring and live
+execution require separate approval.
 
-**Design and approve the Sales Agent Evaluation Study v1 coverage matrix before
-authoring cases.** This approval is still outstanding. The intended study is a
-fresh holdout-style evaluation; earlier scenarios are not automatically its seed
-data. Adoption documentation does not authorize case authoring or live execution.
+The [approved preregistration](studies/sales-agent-evaluation-study-v1-preregistration.md)
+is pinned to commit `5995e24d59d3e5795df0429a940f01a638974dd3`, SHA-256
+`5de0400bc3de7d910902d72b2d7199aab81d0b553e733faabfe0f4da91fa9ace`.
+The independently transcribed [matrix resource](../src/harness/packs/data/salesagent-study-v1-matrix.json)
+contains only approved classifications, totals and selectors. Its bytes are
+pinned by the integration and checked against a separate reading of that
+preregistration in tests. It contains no shopper input or evaluator reference.
 
-## Planned files and binding
+## Future authored files
 
 ```text
 datasets/salesagent/study-v1/
   dataset.json
   cases.jsonl
   suites/
-    ...
+    full.json
+    smoke.json
+    critical.json
+    multi-turn.json
+    adversarial.json
+    variance.json
 ```
 
-This is a layout contract, not an existing or populated study. Final dataset
-identity/version strings, suite filenames, profile IDs and coverage vocabulary
-will be chosen later. The directory name does not substitute for descriptor
-identity or an authored version.
+These files are not created by readiness implementation. The descriptor must
+use ID `sales-agent-evaluation-study`, authored version `study-v1`,
+`dataset-descriptor-v1` and `dataset-cases-v2`. The strict generic loader resolves
+local case bindings relative to the descriptor, rejects unknown/duplicate JSON
+keys and non-finite values, and preserves input/reference/metadata structure.
+Descriptor, full ordered case, selected subset and suite fingerprints remain
+different concepts. Supplied suite fingerprint pins are verified independently.
 
-| File | Future contract |
+The harness owns taxonomy mechanisms; the study owns their values. Shopper
+turns belong in `input.turns`, deterministic assertions and semantic expectations
+in `reference`, and authored provenance in `extra`. No PASS/FAIL, latest status,
+scorer class, experimental membership or suite dispatch belongs on a TestCase.
+Study metadata allowlists are currently empty. A subtree named `provenance`
+is not automatically exported. Full authored metadata still affects hashes.
+
+## Matrix and whole-study validation
+
+`harness.packs.salesagent_study.load_study(descriptor, suite_paths)` uses generic
+descriptor/suite loading. `validate_study()` validates all 50 rows before any
+selection or client construction. It compares against the package resource,
+never against expectations inferred from the candidate itself.
+
+Each approved ID must have its exact category, risk, journey and difficulty.
+There must be exactly one journey tag and one difficulty tag, no duplicate or
+unapproved tags, and no experimental-membership tags. Single-turn requires one
+shopper turn; multi-turn requires at least two. Optional behavior/commerce tags
+remain authoring choices within the approved vocabulary. Totals are:
+
+| Dimension | Counts |
 | --- | --- |
-| `dataset.json` | `DatasetDescriptor` with `schema_version: dataset-descriptor-v1`, a new `id` and authored `version`, optional title/description, `cases: cases.jsonl`, dataset-level `extra`, and `fingerprint_scheme: dataset-cases-v2`. |
-| `cases.jsonl` | One strict v2 TestCase per nonblank physical line. The eventual approved collection will contain 50 cases; none are supplied here. |
-| `suites/*.json` | Generic `suite-v1` definitions binding the exact dataset ID/version through `descriptor: ../dataset.json`, with explicit attempts, authored selection and a logical evaluation profile. Cases are referenced, never copied into suites. |
+| Categories, in preregistration order | 8 / 7 / 6 / 7 / 6 / 6 / 5 / 5 |
+| Journey: single / multi | 30 / 20 |
+| Difficulty: normal / boundary / ambiguous / adversarial | 18 / 19 / 5 / 8 |
+| Risk: critical / high / medium / low | 12 / 18 / 15 / 5 |
 
-Use `harness.core.dataset.load_dataset()` for descriptor-aware loading, or
-`harness.core.suites.resolve_suite()` to load, bind and preview a suite without
-constructing targets, scorers or judges. Validate the entire dataset before
-selection, including cases a subset would exclude. Keep legacy Sales Agent
-loaders and their exact 14-case validation separate from this new path.
+All cases pass Sales Agent input validation, structured assertion validation and
+semantic expectation validation. Invalid references outside a selected smoke
+suite still block execution. Identifiers and literal shopper turns from the
+frozen historical studies cannot be reused. The approved fresh holdout policy
+requires manual review of substantive freshness and factual expectations; there
+is no semantic-similarity detector or invented expectation generator.
 
-Strict loading rejects unknown keys, duplicate JSON object keys, duplicate IDs,
-invalid types/coercions, non-finite JSON values and invalid tags. Identity and
-taxonomy strings reject leading/trailing whitespace rather than trimming it;
-internal whitespace is allowed. Non-null title must be nonblank; description
-remains prose. The descriptor's case binding is local and relative to its
-directory, not the process cwd; absolute paths, URLs and parent traversal are
-invalid. See the [generic authoring guide](test-taxonomy-and-suites.md) for the
-complete validation and selector contracts.
+All six suites bind the same descriptor and use the capture profile. Expressions
+and attempts must match the reviewed matrix, not merely happen to select the
+same cases:
 
-Keep these fingerprint meanings separate:
+| Suite | Selector | Cases | Attempts |
+| --- | --- | --- | --- |
+| full | `{}` | 50 | 1 |
+| smoke | Revised eight explicit IDs in preregistration | 8 | 1 |
+| critical | `risks: [critical]` | 12 | 1 |
+| multi-turn | `tags_all: [journey:multi-turn]` | 20 | 1 |
+| adversarial | `tags_all: [difficulty:adversarial]` | 8 | 1 |
+| variance | Ten explicit approved IDs | 10 | 3 |
 
-- Descriptor fingerprint binds the normalized authored descriptor, including
-  its full metadata and relative case binding.
-- Full case fingerprint binds all ordered case definitions under v2, including
-  inputs, references, classification and authored metadata.
-- Executed subset fingerprint binds only the ordered selected cases and is
-  stored as `RunResult.dataset_hash`.
+The 12 human IDs are an experimental selector, not a judged suite or taxonomy
+tag. They are disjoint from variance and revised smoke. Smoke and variance may
+overlap at SA-STA-004 and SA-ADV-002. Dataset order determines resolved execution
+order; original expressions and ordered membership are frozen together.
 
-Suite binding may pin case content with `expected_case_fingerprint` and may also
-pin the descriptor with `expected_descriptor_fingerprint`. Every supplied pin
-is verified before target calls. Authored versions are not generated from hashes.
+## Profiles and isolation
 
-## Definition ownership and IDs
+`capture_profile()` returns only `StructuredAssertionsScorer`, requiring
+structured, metadata and trajectory evidence, plus profile
+`salesagent-study-v1-capture`. This uniform scorer evaluates every capture
+attempt. It makes zero semantic calls. The study explicitly opts into full
+case payload snapshots and rejects hashes-only overrides; generic defaults
+remain unchanged. Case and dataset metadata allowlists remain empty.
 
-The harness owns taxonomy mechanisms; this study and its integration own values.
-No Sales Agent vocabulary, scenario special cases or category-to-scorer mappings
-belong in core.
+`semantic_profile(judge_configuration, judge_fn)` returns the existing Sales
+Agent rubric scorer with profile `salesagent-study-v1-semantic`. It preserves
+the historical scorer name, rubric/version, whole-conversation evidence
+projection, prompt format and threshold 0.7. It adds only the explicit
+`salesagent-semantic-anchors-v1` output contract: 0.0, 0.3, 0.6, 0.8, 1.0.
+Other scores, including 0.7, are evaluator ERROR under this new profile. The
+historical `salesagent-semantic-v1` factory still accepts continuous scores.
 
-| Definition field | Owner and meaning |
+Both study profiles declare taxonomy excluded. Tests prove changing title,
+description, category, risk, tags and extra leaves semantic prepared bytes
+unchanged. Semantic expectations legitimately enter evaluator evidence; none
+of these evaluator fields enters the Sales Agent HTTP request. Recorded mock
+requests contain only shopper messages and session input. Sessions persist only
+between turns of one attempt and remain isolated across attempts and cases.
+Application validation and evidence projection stay in the Sales Agent pack;
+there are no study values or category-to-scorer mappings in generic core.
+
+## Target and execution freeze
+
+`StudyTargetFreeze` is a strict immutable integration model with a canonical
+digest. `requested` records:
+
+- Credential-free service URL and full deployed target commit SHA.
+- Provider/model and reviewed bounded generation parameters: status, temperature,
+  top-p, maximum output tokens, seed and reasoning effort when exposed.
+- Prompt version and/or digest; catalogue and promotion revision plus SHA-256.
+- Adapter/evidence/HTTP contract versions and exact capabilities.
+- Isolated-case-attempt session policy, reviewed bounded state settings,
+  explicit timeouts and evaluation-trace enablement.
+
+The outer model records full harness revision and operator verification
+(statement, timestamp, deployment reference). Missing facts remain visible via
+`missing_facts` and `inspect-freeze`; they block execution-contract creation.
+Generation/state settings may explicitly say `not_exposed` without claiming
+values. Missing model, fixture, revision or interface facts cannot be inferred
+from historical files. Unknown labels are not substitutes for required facts.
+
+`freeze_execution()` requires explicit manual author review and creates an
+immutable `StudyExecutionContract`. It binds methodology/matrix hashes, descriptor
+and full case fingerprints, all suite fingerprints/expressions/memberships,
+attempts, both profiles, exact semantic evaluator and anchors, human rating
+contract, empty metadata policies, full-payload policy and target freeze.
+Budgets record target invocations and maximum HTTP requests per suite, 50 primary
+semantic calls, and an explicitly supplied diagnostic-call allowance per plan.
+The adapter makes at most two requests per completed shopper turn. These are
+local operation budgets, not a cross-process/provider billing quota.
+
+Capture revalidates the entire study before constructing the target and checks
+actual adapter configuration against the frozen request. Review/verification
+must precede capture. Requested facts are copied before invocation and stored
+in run context. Original per-response/per-turn observed labels remain separate.
+Trace model/prompt/schema drift qualifies comparison; it never overwrites a
+requested setting or triggers automatic recapture. Operator-provided target
+commit and fixture facts are not remote attestations from trace labels.
+
+## Two-stage primary workflow
+
+1. Freeze the authored dataset, suites, deployment facts, evaluator and execution
+   contract after manual review and explicit future authorization.
+2. `capture(..., suite_id="full", target_factory=...)` produces a deterministic
+   capture RunResult with 50 attempts. Persist it immutably through the existing
+   SQLite store. A capture PASS is not a final study PASS.
+3. `prepare_primary()` verifies that exact saved capture and all source cases,
+   then prepares the semantic evaluator on each completed response. Nothing
+   invokes or reruns the target. Failed unprotected responses are explicitly
+   unavailable; a missing protected response blocks preparation of the human
+   study rather than shrinking/substituting its 12-case roster.
+4. Save the preparation and register its prospective bundle. Primary request
+   and observation IDs are derived from the execution contract, original source
+   document, case and attempt; another plan cannot silently reissue them in the
+   same experiment store.
+5. `human_manifest()` creates exactly the reserved 12 protected examples.
+   Export the blind packet; humans independently complete the initially blank
+   draft. Freeze the complete matching annotations using existing receipts.
+6. `judge_request()` validates the complete study/preparation policy. Protected
+   requests then pass the generic receipt/roster gate before the judge factory
+   is constructed. Unprotected requests can be judged independently. Calls use
+   the same captured response and exact prepared prompt/configuration.
+7. Save the returned result once; then construct a separate derived analysis.
+   Do not modify source runs or substitute a different primary observation.
+
+A protected response may not be downgraded by authoring an unprotected replacement
+plan: the study wrapper compares the exact approved human roster and contract.
+The generic API still supports other experiments; it cannot prohibit calls made
+outside the declared study workflow. Use one experiment store for registration.
+Reservations persist after ambiguous failures; see [prospective recovery](prospective-judging.md).
+
+## Variance and derived analysis
+
+After the primary human-review phase, execute the approved variance suite:
+10 cases × 3 isolated target attempts. This is end-to-end target variation.
+The operator follows the preregistered phase order; the command API does not
+schedule phases automatically. Failed conversations retain ERROR with no
+fabricated partial TargetResponse. Every completed response remains selectable
+by original run/case/attempt. `prepare_variance_diagnostic()` prepares fixed
+responses for separately budgeted judge-only diagnostics without another target
+call. Diagnostics are distinct artifacts and cannot replace primary observations.
+
+`reporting.study.analyze()` validates source/contract/preparation bindings and
+selected result/receipt/configuration before creating immutable `StudyAnalysis`.
+Each original attempt has classification, deterministic scores/errors, semantic
+availability and evidence, request/result/receipt hashes and a derived outcome.
+Pending semantic evidence has no final PASS/FAIL/ERROR/zero. A target failure
+without response is terminal ERROR with semantic evidence unavailable. When
+all required evidence is terminal, ERROR takes precedence, then gated FAIL,
+PASS and SKIP. Critical deterministic failures remain visible independently.
+
+The analysis retains source/preparation/result digests and requested-versus-
+observed context. It never impersonates an executed RunResult or mutates one.
+JSON receipt persistence supports standalone descriptive grouping by category,
+risk and overlapping tags. Each layer has separate counts, quality denominators,
+error rates and scorer evidence counts. Quality rates use the existing mean of
+case pass rates, excluding absent quality evidence; no risk weighting or new gate
+is introduced. Comparisons show both groups/memberships and changed/unknown
+context rather than claiming an unqualified target regression. The small
+Markdown renderer escapes authored identifiers. Diagnostic artifacts remain
+outside primary summaries.
+
+## Commands
+
+The thin [recipe](../examples/salesagent_study.py) has no import-time clients.
+Run from the repository environment. No real study files are supplied yet.
+`--help` describes required arguments. Commands requiring a study take
+`--descriptor PATH --suites PATH1 PATH2 PATH3 PATH4 PATH5 PATH6`.
+
+| Command | Behavior |
 | --- | --- |
-| `id` | Study-owned stable scenario identifier, unique within its dataset. |
-| `title`, `description` | Optional human-readable definition text. |
-| `input` | Intended shopper/user turns, using the supported Sales Agent input contract (`input.turns` today). |
-| `reference` | Application-specific deterministic assertions and semantic expectations, validated by the integration. |
-| `category` | Optional primary classification of what the case is about. |
-| `tags` | Cross-cutting classification; values may span several primary categories. |
-| `risk` | Optional declared criticality, opaque to core; no built-in weighting, ordering or automatic gate. |
-| Case `extra` | Safe authored provenance and case metadata. Export requires a separate explicit allowlist. |
-| Descriptor `extra` | Safe study-level provenance/metadata, with its own export allowlist. |
+| `validate`, `preview` | Pure loading/validation and fingerprinted membership/budget summary. |
+| `inspect-freeze PATH` | Pure missing-fact list and target-freeze fingerprint. |
+| `freeze` | Pure contract preparation from explicit target/judge JSON, review statement/time and diagnostic budget; new receipt directory. |
+| `capture` | Requires contract, suite, new output directory, exact target budget, `--live` **and** `--allow-target-calls`. |
+| `prepare` | Reads saved capture, creates primary preparation and prospective registration; requires reserved plan/review-set IDs. |
+| `prepare-diagnostic` | Reads variance capture; explicit case/attempt, plan ID and bounded judge attempt count. |
+| `export` | Verifies preparation and writes blind packet/blank human draft. |
+| `freeze-human` | Freezes supplied human-authored draft; never generates ratings. |
+| `judge` | Requires prepared request, source, store, exact call budget, `--live` **and** `--allow-judge-calls`; protected requests also require `--frozen`. |
+| `analyze`, `render`, `compare` | Read-only joins/rendering/comparison, with new immutable analysis output when requested. |
 
-Do not add a second `metadata` container, concrete scorer class names, latest
-status or PASS/FAIL to TestCase. Suites define execution membership; profiles/run
-configuration select evaluation; attempts in RunResult contain verdicts.
+`capture` writes a recovery JSON before SQLite insertion; `judge` writes a
+recovery JSON before result publication. A save failure never triggers another
+call. Retain the in-memory/recovery result and retry saving only; partial files
+are not overwritten. New output directories and existing observation
+reservations prevent silent replacement.
 
-IDs are stable once a study definition is published. Cross-study reuse must be
-intentional and semantically justified. Similar wording does not automatically
-imply case identity, and a matching ID alone does not establish cross-dataset
-comparability. The coverage exercise will decide whether any existing scenario
-or ID is reused; this contract makes no such decision. Changed inputs,
-expectations or classification remain detectable through definition fingerprints.
+The live recipe currently constructs the existing Sales Agent HTTP adapter and
+existing OpenAI judge adapter only for its exact declared configuration. It reads
+`HARNESS_JUDGE_API_KEY` solely inside the deferred post-receipt factory and never
+records it. Python factories support other injected provider-neutral judges.
+Import/help/validation/preview/freeze/preparation/export/analysis never construct
+those clients. Readiness tests use only deterministic fakes and mock transport.
 
-## Recipe and evaluation-profile ownership
+## Compatibility and remaining approval
 
-Future Sales Agent recipe code resolves a suite's logical profile ID through
-ordinary explicit Python factories. Suite JSON is not an executable class or
-plugin specification. A factory supplies a uniform scorer list for the entire
-run, an `EvaluationProfile`, and the integration validator for the selected
-reference contract. It does not dispatch scorers by category, risk or case ID.
+Historical baseline/semantic datasets, their 14-case loaders, profiles, expected
+hashes, replay/calibration artifacts and human bindings remain untouched. No
+RunResult/SQLite schema, Target protocol or generic taxonomy/suite changes are
+needed. New readers require the prospective schemas plus study validation,
+target-freeze, execution, preparation and analysis `v1` schemas. Older readers
+must not resave these artifacts while dropping context.
 
-| Responsibility | Integration contract |
-| --- | --- |
-| Deterministic evaluation | Construct supported structured assertion scorers explicitly; case references supply assertions. Preserve critical checks and independent scorer results. |
-| Semantic evaluation | Construct semantic scorers with injected judges only when required by the approved profile. Record model/provider settings, thresholds, rubric and projection versions through explicit scorer and `JudgeConfiguration` settings. No new rubric or threshold is selected here. |
-| Capability requirements | Choose scorers whose declared evidence requirements match the adapter's capabilities. The current adapter advertises `structured`, `metadata`, `trajectory`; requirements come from scorers, never taxonomy. Generic execution checks the union before invocation. |
-| Configuration evidence | Populate `scorer_configuration` and applicable `judge_configurations` under stable scorer names; use `safe_parameters` only for reviewed finite JSON configuration. Missing custom configuration remains unknown for comparisons. |
-| Taxonomy evidence | Declare `taxonomy_evidence` as `excluded` or `explicitly_included`; document the actual evidence projection rather than infer it from profile names. |
-| Metadata export | Supply reviewed `case_extra_keys` and `dataset_extra_keys`; both default to empty. Review the entire subtree of each allowed key. A key named `provenance` does not establish safety. |
-| Payload persistence | Choose `case_payload_snapshot` deliberately; defaults are hashes-only and replay-oriented opt-in is described below. |
-| Reference semantics | Pair a versioned `reference_contract` with a pure `validate_reference(TestCase)` callback to `execute_suite()`. Validate every selected case before any target call without mutating definitions. |
-
-Future recipes should resolve/inspect preview and perform application input and
-reference preflight before constructing live clients. Generic suite validation
-does not validate Sales Agent business semantics and cannot undo side effects
-of clients already constructed by callers. The integration owns input shape,
-reference schema and expected evidence compatibility; it must not route the new
-study through a frozen loader merely to reuse its whole-study restrictions.
-
-After preflight, explicitly supplied target/scorer instances and the profile
-are passed to `execute_suite()`. Profile ID must match the suite or an explicit
-recorded replacement. Supported overrides are attempts, profile replacement and
-payload policy; effective values and authored defaults remain distinct. Empty
-selection cannot execute. A suite without a profile still requires explicit
-profile/scorer arguments; the future study should author logical profile IDs.
-
-Existing integration sources document reusable boundaries, not new study entry
-points: [baseline recipe](../examples/salesagent_baseline.py),
-[semantic pack](../src/harness/packs/salesagent_semantic.py), and
-[HTTP adapter](../src/harness/targets/salesagent.py). Their frozen-study loaders,
-rubrics and evidence contracts are unchanged. Future factories must deliberately
-select compatible components without inheriting the old dataset size or IDs.
-
-## Payload policy and replay
-
-`hashes_only` is the generic default. Every v2 execution still preserves the
-definition hash/scheme, title/description/category/risk, copied tags, configured
-safe metadata projection and execution context needed for historical reporting.
-It does not persist canonical TestCase input/reference payloads.
-
-Profiles requiring those payloads for exact replay/reconstruction may explicitly
-set `case_payload_snapshot: full`. A profile that requires full persistence also
-sets `requires_full_payload: true`, rejecting hashes-only overrides. A future
-Sales Agent semantic/replay profile may make that choice; simply using a judge
-does not opt in. Record effective policy, policy source and any run override.
-
-Full mode additionally stores selected canonical input/reference payloads in
-`resolved_cases`, excluding full authored `extra`. It does not guarantee a
-self-contained replay: selected subsets, omitted authored metadata or external
-evaluator dependencies can still require verified source material. Hashes-only
-replay needs externally supplied source cases verified against the recorded
-scheme, dataset and definition hashes and execution context. Missing or
-mismatched material fails preflight; never substitute current cases silently.
-
-Both modes support persisted classification grouping and definition-hash
-comparison. Payload availability differences are artifact context, separate from
-quality configuration changes. Neither mode redacts target response evidence or
-explicit scorer settings. Do not copy secrets, hidden prompts or raw provider
-state into metadata/configuration. No general redaction framework is proposed.
-
-## Target and judge isolation
-
-Only intended shopper/session input reaches the Sales Agent HTTP contract.
-Case IDs, titles, descriptions, category, risk, tags, reference expectations,
-thresholds and evaluator metadata must not become request input. Session state
-is preserved only between turns of the same attempt; cases and repeated attempts
-remain isolated. The adapter normalizes per-turn evidence into TargetResponse.
-
-The retained Target protocol passes a TestCase to the adapter, so forwarding
-discipline remains an integration obligation. Future adoption tests must record
-mock HTTP request bodies and prove that changing only classification, reference
-or metadata leaves application request bytes unchanged.
-
-Judge evidence is a separate evaluator boundary. Sales Agent evidence projection
-remains integration-owned. An exclusion profile needs a named/versioned reviewed
-projection and tests proving that title/description/category/tags/risk/extra
-changes leave prepared evidence/prompt bytes unchanged. The default legacy
-RubricJudgeScorer builder includes tags; preserve its behavior and never label
-that default as taxonomy-excluded. No legacy prompt or rubric is changed here.
-
-## Frozen evidence and future adoption acceptance
-
-`baseline.jsonl` and `semantic.jsonl` remain historical frozen 14-case studies,
-with existing loaders, bytes and expected hashes unchanged. Their run, replay,
-calibration artifacts and human bindings are not migrated or backfilled. Legacy
-v1 serialization/hashes and historical payload representation remain intact.
-Do not relabel old runs as v2 or add new persistence-policy keys to them.
-
-The new study uses a separate descriptor and strict v2 path. Readers must
-support `run-organization-v1` and `case-definition-snapshot-v1`; old tooling must
-not resave artifacts after discarding unknown fields. Fingerprint schemes and
-dataset identities must remain explicit when comparing old/new results. No
-direct target-regression claim follows from comparing different studies.
-
-After coverage approval and future authoring/integration authorization, adoption
-acceptance should use deterministic fakes and mocked HTTP to prove strict whole-
-dataset validation, suite binding/preview, selected-reference preflight,
-capability mismatch rejection, uniform scoring, request/session isolation,
-projection invariance, both payload policies and verified replay requirements.
-Check persisted grouping/comparison from recorded evidence alone and unchanged
-frozen-study compatibility. These are future acceptance requirements, not tests
-or entry points implemented by this documentation milestone. Live evaluations
-remain separately and explicitly invoked.
-
-## Outstanding coverage-matrix decisions
-
-Before authoring any of the 50 cases, explicitly approve:
-
-- The 50-case distribution and primary categories.
-- Cross-cutting tags and risk assignments.
-- Single-turn versus multi-turn distribution.
-- Normal versus edge/adversarial cases.
-- Deterministic versus semantic expectations.
-- Holdout strategy and deliberate reuse, if any, of existing scenarios/IDs.
-- Suite membership and associated evaluation profiles.
-
-Possible suite purposes include full evaluation, smoke, critical/high-risk,
-semantic quality, and multi-turn or other coverage-driven subsets. These are
-possibilities only, not selected names, risk values, membership or filters.
-Use the generic selector once coverage is approved; do not predefine a Sales
-Agent taxonomy in core or infer profile selection from these labels.
-
-The [ExecPlan](plans/test-taxonomy-datasets-suites.md) records completion of this
-preparation milestone. The coverage matrix, actual study files and all 50 case
-definitions remain outstanding.
+Before a live study, remaining work is to authorize and author/review the 50
+fresh case inputs and expectations, freeze their actual descriptor/suites, resolve
+real deployment facts, supply and review actual judge configuration, and approve
+live execution and budgets. The coverage matrix is already approved; it must not
+be redesigned to fit observed outcomes. No case authoring or live run is part of
+[the readiness implementation](plans/salesagent-study-v1-readiness.md).

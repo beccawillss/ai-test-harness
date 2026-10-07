@@ -1,9 +1,10 @@
 # Sales Agent Study v1 readiness
 
 This ExecPlan was created on 2026-10-03. Its architecture is approved, with the
-per-case journey/difficulty amendment committed on 2026-10-05. **Milestone 1 only
-is authorized for implementation.** Milestone 2 and study case authoring remain
-unstarted and require separate approval. No live targets or judges are authorized.
+per-case journey/difficulty amendment committed on 2026-10-05. **Milestones 1–2
+are authorized for implementation.** Milestone 1 is committed; Milestone 2 was
+authorized on 2026-10-05. Study case authoring remains
+unstarted and requires separate approval. No live targets or judges are authorized.
 
 Authoritative methodology: [Sales Agent Evaluation Study v1 pre-registration](../studies/sales-agent-evaluation-study-v1-preregistration.md).
 It is committed at `5995e24d59d3e5795df0429a940f01a638974dd3`, has status
@@ -27,7 +28,7 @@ successor containing both prerequisites, rather than downgrading the baseline.
 The later implementation request explicitly authorized the prerequisite
 preregistration commit, now pinned above. Implementation remains on that
 feature branch. No merge, rebase, branch deletion or history rewrite is authorized;
-Milestone 1 code remains uncommitted for review.
+Milestone 1 is committed as `d80af3d`; Milestone 2 continues on the same branch.
 
 ## Purpose, acceptance and progress
 
@@ -66,10 +67,11 @@ Progress:
 - [x] Recheck 23 protected file hashes read-only.
 - [x] Draft architecture, compatibility strategy, file map and offline acceptance.
 - [x] Architecture approved; exact per-ID methodology amendment committed first.
-- [x] Milestone 1 authorized on 2026-10-05; Milestone 2 remains unauthorized.
+- [x] Milestones 1–2 authorized on 2026-10-05.
 - [x] Milestone 1: prospective judging, opt-in human freeze and anchor contract.
-- [ ] Milestone 2: Study v1 integration, validation and offline analysis join.
+- [x] Milestone 2: Study v1 integration, validation and offline analysis join.
 - [x] Record Milestone 1 validation commands, results and implementation decisions.
+- [x] Record Milestone 2 offline validation and compatibility outcomes.
 - [ ] Separate future authorization: author/review/freeze the 50 study cases.
 - [ ] Separate future authorization: live study execution.
 
@@ -957,8 +959,117 @@ privacy is an integration responsibility; and source cases are independently
 required when a run lacks complete reconstructible material. No release version
 is assigned yet; reader feature/schema requirements are documented.
 
-**Milestone 1 complete. Stop here.** Milestone 2, its matrix resource/validator,
+**Milestone 1 checkpoint (superseded by the authorization below).** At this
+checkpoint Milestone 2, its matrix resource/validator,
 Sales Agent profile/target-freeze wiring, combined study analysis, Study v1 case
 authoring and live execution remain unstarted. Only the preregistration amendment
 was committed; implementation and this living plan are left for review on
 `feat/salesagent-study-v1-readiness`.
+
+## Milestone 2 implementation log — 2026-10-05
+
+Re-read AGENTS.md, the complete approved methodology and this plan. Confirmed
+clean `feat/salesagent-study-v1-readiness` at `d80af3d`, with integrated generic
+work and `5995e24` both ancestors. Rechecked all 23 protected hashes and historical
+replay/calibration bindings read-only before implementation. No intervening
+source changes beyond the approved Milestone 1 commit.
+
+Implemented only the application integration, matrix metadata, derived analysis,
+thin recipe, tests and adoption documentation. No generic core, target, historical
+recipe, frozen dataset, preregistration or stored artifact changed. Disposable
+50-row candidates exist only in pytest temporary directories; no Study v1
+dataset/descriptor/suite files were authored.
+
+The independent matrix resource pins methodology `5995e24` / the full SHA-256
+above. Its byte SHA-256 is
+`c0e15099ab3bccf54b7528a20d11fddbff71c5dccec89ab4ea9022a6ba9924b1`;
+its canonical content fingerprint is
+`30ea27e185e430f79d3210e8eeb4b93b40b2c70a098260c375ee79fca63165f0`.
+Tests independently read the approved document and check every transcription,
+all totals and experimental selectors. Validation checks all 50 rows, exact
+per-ID classifications, approved tag vocabulary, actual turn counts, fresh
+IDs/literal turns, all reference contracts and all six suite expressions and
+attempt policies. Swapped classifications with unchanged totals still fail.
+
+The capture profile supplies only deterministic structured assertions. The
+semantic profile reuses the historical rubric/projection/prompt/scorer name and
+threshold, adding only the approved anchor contract. Both opt into full payloads
+and empty metadata allowlists. Exact profile/evaluator/selector/metadata values,
+suite fingerprints, budgets, manual author review and target freeze are bound
+in immutable versioned execution contracts. Missing mandatory deployment facts
+block freezing; requested facts and observed labels remain distinct.
+
+Primary preparation uses the saved full capture, with stable request/observation
+reservations derived from contract/source/case/attempt. The 12 protected sources
+must all exist; complete matching human freeze precedes judge construction.
+Policy stripping, reissuing primary IDs under another plan, wrong source/config/
+receipt and diagnostic substitution fail. Variance retains the approved 10 × 3
+source attempts and permits separate fixed-response diagnostic preparations.
+
+StudyAnalysis retains every original attempt and independent deterministic,
+semantic and combined evidence. Pending semantics has no final quality verdict;
+target failure remains ERROR without a fabricated response. Critical failures
+remain visible. Analysis reload checks anchors and rejects Boolean score
+coercion. Derived artifacts use existing exclusive/checksummed JSON persistence;
+source RunResults and SQLite schemas stay unchanged. Grouping preserves separate
+verdicts/evidence counts, overlapping tags and descriptive context comparisons.
+
+The recipe implements validate/preview/inspect-freeze/freeze/capture/prepare/
+prepare-diagnostic/export/freeze-human/judge/analyze/render/compare. Pure commands
+never create clients. Future live commands require both explicit opt-ins and an
+exact operation budget; capture/judgment recovery JSON is written before final
+store publication, with no automatic re-execution on save failure. Tests exercise
+the command pipeline using injected fakes and mock HTTP only.
+
+Implementation decisions within the approved boundaries: `validate_study` takes
+dataset/suites and loads its pinned package matrix itself (no caller-supplied
+expected matrix); profile factories return scorer/profile pairs with a separately
+named reference validator; canonical JSON bodies keep nested immutable contracts
+detached. The CLI supports the existing OpenAI judge adapter under exact explicit
+configuration; Python factories retain provider-neutral injection. No new plugin
+registry, scheduler, billing service or provider abstraction was introduced.
+
+Limits remain explicit in adoption documentation: phase ordering is operator-led;
+diagnostic call budgets apply per declared plan, not globally across processes;
+deployment facts are operator-verified, not remotely attested by trace labels;
+substantive holdout/factual review is manual. One experiment observation store is
+required to enforce shared primary reservations. These mechanisms do not prevent
+out-of-band provider calls. Actual case authoring, deployment resolution and live
+execution remain separate future approvals.
+
+Final validation (offline; no provider credentials, installs or live calls):
+
+```sh
+.venv/bin/python -m pytest tests/test_salesagent_study.py tests/test_study_reporting.py tests/test_suites.py tests/test_salesagent_target.py tests/test_salesagent_baseline.py tests/test_salesagent_semantic.py tests/test_salesagent_judge_replay.py tests/test_salesagent_human_calibration.py tests/test_grouping.py tests/test_comparison.py
+```
+
+- Required focused command: **615 passed** (54.55 seconds).
+- Final persisted-score hardening check:
+  `.venv/bin/python -m pytest tests/test_study_reporting.py -q -k analysis_reload`:
+  **3 passed, 12 deselected** (9.40 seconds). This added two Boolean-score cases
+  after the focused command collected its tests; both are included below.
+- `.venv/bin/python -m pytest`: **1,468 passed** (61.84 seconds), including
+  **268 new Study integration/reporting tests** and all 1,200 existing tests.
+- `.venv/bin/ruff check src tests examples`: passed.
+- `.venv/bin/mypy src`: passed, **38 source files**.
+- `git diff --check`: passed. New-file whitespace and relative documentation
+  links were checked separately because unstaged new files are not in git diff.
+- `.venv/bin/python /tmp/readiness_m1_integrity.py`: all **23 protected byte
+  hashes** unchanged; exact baseline/semantic v1 case hashes still match the
+  protected constants. Both historical ReplayResults reload; each of the two
+  historical calibration analyses rebuilds all **18 observation bindings**
+  exactly. No historical artifacts were written.
+- The committed preregistration bytes still match the pinned file hash. Its
+  50 scenarios/risks/V/H memberships and all methodology text remain unchanged;
+  journey 30/20, difficulty 18/19/5/8, risk 12/18/15/5, category 8/7/6/7/6/6/5/5
+  and all experimental subset memberships remain exact.
+
+Early test-development failures (numeric timeout representation comparison and
+a missing test import) were corrected. No legacy expected hash, historical
+binding or artifact was altered to make tests pass. No material architecture
+deviation; concrete signatures, local budget scope and operational limits are
+recorded above and in adoption documentation.
+
+**Milestone 2 complete. Stop here.** Implementation is uncommitted for review
+on `feat/salesagent-study-v1-readiness`, based on committed Milestone 1 `d80af3d`.
+No Study v1 cases, live runs or subsequent feature work were started.

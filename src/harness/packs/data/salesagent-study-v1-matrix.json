@@ -1,0 +1,488 @@
+{
+  "schema_version": "salesagent-study-v1-matrix-v1",
+  "methodology_commit": "5995e24d59d3e5795df0429a940f01a638974dd3",
+  "methodology_sha256": "5de0400bc3de7d910902d72b2d7199aab81d0b553e733faabfe0f4da91fa9ace",
+  "dataset_id": "sales-agent-evaluation-study",
+  "dataset_version": "study-v1",
+  "cases": [
+    {
+      "id": "SA-REC-001",
+      "category": "recommendation-quality",
+      "risk": "medium",
+      "journey": "single-turn",
+      "difficulty": "normal"
+    },
+    {
+      "id": "SA-REC-002",
+      "category": "recommendation-quality",
+      "risk": "medium",
+      "journey": "single-turn",
+      "difficulty": "boundary"
+    },
+    {
+      "id": "SA-REC-003",
+      "category": "recommendation-quality",
+      "risk": "medium",
+      "journey": "single-turn",
+      "difficulty": "normal"
+    },
+    {
+      "id": "SA-REC-004",
+      "category": "recommendation-quality",
+      "risk": "medium",
+      "journey": "single-turn",
+      "difficulty": "normal"
+    },
+    {
+      "id": "SA-REC-005",
+      "category": "recommendation-quality",
+      "risk": "low",
+      "journey": "single-turn",
+      "difficulty": "normal"
+    },
+    {
+      "id": "SA-REC-006",
+      "category": "recommendation-quality",
+      "risk": "low",
+      "journey": "single-turn",
+      "difficulty": "normal"
+    },
+    {
+      "id": "SA-REC-007",
+      "category": "recommendation-quality",
+      "risk": "medium",
+      "journey": "single-turn",
+      "difficulty": "normal"
+    },
+    {
+      "id": "SA-REC-008",
+      "category": "recommendation-quality",
+      "risk": "medium",
+      "journey": "multi-turn",
+      "difficulty": "boundary"
+    },
+    {
+      "id": "SA-CON-001",
+      "category": "constraint-handling",
+      "risk": "medium",
+      "journey": "single-turn",
+      "difficulty": "boundary"
+    },
+    {
+      "id": "SA-CON-002",
+      "category": "constraint-handling",
+      "risk": "high",
+      "journey": "single-turn",
+      "difficulty": "boundary"
+    },
+    {
+      "id": "SA-CON-003",
+      "category": "constraint-handling",
+      "risk": "high",
+      "journey": "single-turn",
+      "difficulty": "boundary"
+    },
+    {
+      "id": "SA-CON-004",
+      "category": "constraint-handling",
+      "risk": "medium",
+      "journey": "multi-turn",
+      "difficulty": "normal"
+    },
+    {
+      "id": "SA-CON-005",
+      "category": "constraint-handling",
+      "risk": "medium",
+      "journey": "multi-turn",
+      "difficulty": "ambiguous"
+    },
+    {
+      "id": "SA-CON-006",
+      "category": "constraint-handling",
+      "risk": "high",
+      "journey": "single-turn",
+      "difficulty": "boundary"
+    },
+    {
+      "id": "SA-CON-007",
+      "category": "constraint-handling",
+      "risk": "high",
+      "journey": "multi-turn",
+      "difficulty": "boundary"
+    },
+    {
+      "id": "SA-INV-001",
+      "category": "inventory-variants",
+      "risk": "high",
+      "journey": "single-turn",
+      "difficulty": "normal"
+    },
+    {
+      "id": "SA-INV-002",
+      "category": "inventory-variants",
+      "risk": "critical",
+      "journey": "single-turn",
+      "difficulty": "boundary"
+    },
+    {
+      "id": "SA-INV-003",
+      "category": "inventory-variants",
+      "risk": "high",
+      "journey": "multi-turn",
+      "difficulty": "boundary"
+    },
+    {
+      "id": "SA-INV-004",
+      "category": "inventory-variants",
+      "risk": "high",
+      "journey": "single-turn",
+      "difficulty": "normal"
+    },
+    {
+      "id": "SA-INV-005",
+      "category": "inventory-variants",
+      "risk": "high",
+      "journey": "single-turn",
+      "difficulty": "normal"
+    },
+    {
+      "id": "SA-INV-006",
+      "category": "inventory-variants",
+      "risk": "critical",
+      "journey": "single-turn",
+      "difficulty": "boundary"
+    },
+    {
+      "id": "SA-PRC-001",
+      "category": "promotions-pricing",
+      "risk": "critical",
+      "journey": "multi-turn",
+      "difficulty": "normal"
+    },
+    {
+      "id": "SA-PRC-002",
+      "category": "promotions-pricing",
+      "risk": "high",
+      "journey": "single-turn",
+      "difficulty": "normal"
+    },
+    {
+      "id": "SA-PRC-003",
+      "category": "promotions-pricing",
+      "risk": "high",
+      "journey": "single-turn",
+      "difficulty": "normal"
+    },
+    {
+      "id": "SA-PRC-004",
+      "category": "promotions-pricing",
+      "risk": "critical",
+      "journey": "single-turn",
+      "difficulty": "boundary"
+    },
+    {
+      "id": "SA-PRC-005",
+      "category": "promotions-pricing",
+      "risk": "critical",
+      "journey": "single-turn",
+      "difficulty": "adversarial"
+    },
+    {
+      "id": "SA-PRC-006",
+      "category": "promotions-pricing",
+      "risk": "critical",
+      "journey": "multi-turn",
+      "difficulty": "adversarial"
+    },
+    {
+      "id": "SA-PRC-007",
+      "category": "promotions-pricing",
+      "risk": "critical",
+      "journey": "multi-turn",
+      "difficulty": "boundary"
+    },
+    {
+      "id": "SA-STA-001",
+      "category": "conversation-state",
+      "risk": "medium",
+      "journey": "multi-turn",
+      "difficulty": "normal"
+    },
+    {
+      "id": "SA-STA-002",
+      "category": "conversation-state",
+      "risk": "medium",
+      "journey": "multi-turn",
+      "difficulty": "normal"
+    },
+    {
+      "id": "SA-STA-003",
+      "category": "conversation-state",
+      "risk": "medium",
+      "journey": "multi-turn",
+      "difficulty": "normal"
+    },
+    {
+      "id": "SA-STA-004",
+      "category": "conversation-state",
+      "risk": "high",
+      "journey": "multi-turn",
+      "difficulty": "boundary"
+    },
+    {
+      "id": "SA-STA-005",
+      "category": "conversation-state",
+      "risk": "high",
+      "journey": "multi-turn",
+      "difficulty": "normal"
+    },
+    {
+      "id": "SA-STA-006",
+      "category": "conversation-state",
+      "risk": "medium",
+      "journey": "multi-turn",
+      "difficulty": "normal"
+    },
+    {
+      "id": "SA-GRD-001",
+      "category": "grounding-factuality",
+      "risk": "high",
+      "journey": "single-turn",
+      "difficulty": "boundary"
+    },
+    {
+      "id": "SA-GRD-002",
+      "category": "grounding-factuality",
+      "risk": "high",
+      "journey": "single-turn",
+      "difficulty": "boundary"
+    },
+    {
+      "id": "SA-GRD-003",
+      "category": "grounding-factuality",
+      "risk": "high",
+      "journey": "single-turn",
+      "difficulty": "boundary"
+    },
+    {
+      "id": "SA-GRD-004",
+      "category": "grounding-factuality",
+      "risk": "high",
+      "journey": "single-turn",
+      "difficulty": "boundary"
+    },
+    {
+      "id": "SA-GRD-005",
+      "category": "grounding-factuality",
+      "risk": "critical",
+      "journey": "single-turn",
+      "difficulty": "boundary"
+    },
+    {
+      "id": "SA-GRD-006",
+      "category": "grounding-factuality",
+      "risk": "high",
+      "journey": "multi-turn",
+      "difficulty": "adversarial"
+    },
+    {
+      "id": "SA-RCV-001",
+      "category": "recovery-ambiguity",
+      "risk": "low",
+      "journey": "multi-turn",
+      "difficulty": "ambiguous"
+    },
+    {
+      "id": "SA-RCV-002",
+      "category": "recovery-ambiguity",
+      "risk": "low",
+      "journey": "multi-turn",
+      "difficulty": "ambiguous"
+    },
+    {
+      "id": "SA-RCV-003",
+      "category": "recovery-ambiguity",
+      "risk": "medium",
+      "journey": "single-turn",
+      "difficulty": "boundary"
+    },
+    {
+      "id": "SA-RCV-004",
+      "category": "recovery-ambiguity",
+      "risk": "medium",
+      "journey": "single-turn",
+      "difficulty": "ambiguous"
+    },
+    {
+      "id": "SA-RCV-005",
+      "category": "recovery-ambiguity",
+      "risk": "low",
+      "journey": "multi-turn",
+      "difficulty": "ambiguous"
+    },
+    {
+      "id": "SA-ADV-001",
+      "category": "business-rule-resistance",
+      "risk": "critical",
+      "journey": "single-turn",
+      "difficulty": "adversarial"
+    },
+    {
+      "id": "SA-ADV-002",
+      "category": "business-rule-resistance",
+      "risk": "critical",
+      "journey": "single-turn",
+      "difficulty": "adversarial"
+    },
+    {
+      "id": "SA-ADV-003",
+      "category": "business-rule-resistance",
+      "risk": "critical",
+      "journey": "multi-turn",
+      "difficulty": "adversarial"
+    },
+    {
+      "id": "SA-ADV-004",
+      "category": "business-rule-resistance",
+      "risk": "critical",
+      "journey": "multi-turn",
+      "difficulty": "adversarial"
+    },
+    {
+      "id": "SA-ADV-005",
+      "category": "business-rule-resistance",
+      "risk": "high",
+      "journey": "single-turn",
+      "difficulty": "adversarial"
+    }
+  ],
+  "tags": [
+    "journey:single-turn",
+    "journey:multi-turn",
+    "difficulty:normal",
+    "difficulty:boundary",
+    "difficulty:ambiguous",
+    "difficulty:adversarial",
+    "behavior:recommendation",
+    "behavior:comparison",
+    "behavior:constraint-handling",
+    "behavior:inventory",
+    "behavior:promotion",
+    "behavior:state",
+    "behavior:grounding",
+    "behavior:clarification",
+    "behavior:no-match",
+    "behavior:recovery",
+    "behavior:prompt-resistance",
+    "commerce:product",
+    "commerce:inventory",
+    "commerce:pricing",
+    "commerce:promotion"
+  ],
+  "totals": {
+    "category": {
+      "recommendation-quality": 8,
+      "constraint-handling": 7,
+      "inventory-variants": 6,
+      "promotions-pricing": 7,
+      "conversation-state": 6,
+      "grounding-factuality": 6,
+      "recovery-ambiguity": 5,
+      "business-rule-resistance": 5
+    },
+    "risk": {
+      "critical": 12,
+      "high": 18,
+      "medium": 15,
+      "low": 5
+    },
+    "journey": {
+      "single-turn": 30,
+      "multi-turn": 20
+    },
+    "difficulty": {
+      "normal": 18,
+      "boundary": 19,
+      "ambiguous": 5,
+      "adversarial": 8
+    }
+  },
+  "human": {
+    "case_ids": [
+      "SA-REC-001",
+      "SA-REC-004",
+      "SA-CON-002",
+      "SA-CON-006",
+      "SA-INV-002",
+      "SA-PRC-001",
+      "SA-PRC-007",
+      "SA-STA-003",
+      "SA-GRD-003",
+      "SA-GRD-006",
+      "SA-RCV-003",
+      "SA-ADV-004"
+    ]
+  },
+  "suites": {
+    "full": {
+      "selection": {},
+      "attempts": 1
+    },
+    "smoke": {
+      "selection": {
+        "case_ids": [
+          "SA-REC-002",
+          "SA-CON-003",
+          "SA-INV-001",
+          "SA-PRC-004",
+          "SA-STA-004",
+          "SA-GRD-001",
+          "SA-RCV-004",
+          "SA-ADV-002"
+        ]
+      },
+      "attempts": 1
+    },
+    "critical": {
+      "selection": {
+        "risks": [
+          "critical"
+        ]
+      },
+      "attempts": 1
+    },
+    "multi-turn": {
+      "selection": {
+        "tags_all": [
+          "journey:multi-turn"
+        ]
+      },
+      "attempts": 1
+    },
+    "adversarial": {
+      "selection": {
+        "tags_all": [
+          "difficulty:adversarial"
+        ]
+      },
+      "attempts": 1
+    },
+    "variance": {
+      "selection": {
+        "case_ids": [
+          "SA-REC-007",
+          "SA-REC-008",
+          "SA-CON-005",
+          "SA-CON-007",
+          "SA-INV-003",
+          "SA-PRC-006",
+          "SA-STA-004",
+          "SA-RCV-002",
+          "SA-RCV-005",
+          "SA-ADV-002"
+        ]
+      },
+      "attempts": 3
+    }
+  }
+}
