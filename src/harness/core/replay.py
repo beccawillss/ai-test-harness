@@ -32,10 +32,18 @@ from harness.core.fingerprints import (
     fingerprint,
     text_hash,
 )
-from harness.core.models import RunResult, Score, ScorerKind, TestCase, Verdict
+from harness.core.models import (
+    AttemptResult,
+    RunResult,
+    Score,
+    ScorerKind,
+    TestCase,
+    Verdict,
+)
 from harness.core.snapshots import definition_snapshot, metadata_keys
 from harness.judges.base import JudgeObservation, JudgeScoringError
 from harness.scorers.base import JudgedScorer, PreparedJudgeInput
+from harness.scorers.output_contracts import ScoreOutputContract
 
 
 class ReplayValidationError(ValueError):
@@ -103,8 +111,15 @@ class EvaluatorConfiguration(_Frozen):
             "judgment_version",
             "evidence_settings",
         }
-        if not isinstance(config, dict) or set(config) != expected:
+        if not isinstance(config, dict) or set(config) not in (
+            expected,
+            expected | {"output_validation"},
+        ):
             raise ValueError("Explicit scorer configuration is required")
+        if "output_validation" in config:
+            ScoreOutputContract.model_validate_json(
+                canonical_json(config["output_validation"])
+            )
         if (
             config["kind"] != "judged"
             or not isinstance(config["name"], str)
@@ -457,32 +472,17 @@ def reconstruct_source_cases(source: RunResult) -> list[TestCase]:
         ) from None
 
 
-def prepare_replay(
+def _verify_source(
     source: RunResult,
     cases: Sequence[TestCase],
-    scorer: JudgedScorer,
     *,
-    judge_configuration: JudgeConfiguration,
     database_locator: str,
     case_id: str,
     source_attempt: int,
-    attempts: int,
-    source_evaluator: EvaluatorConfiguration | None = None,
-    source_document_hash: str | None = None,
-    allow_reconfigured: bool = False,
-) -> PreparedReplay:
-    """Verify a saved response and dataset before preparing any provider request.
-
-    A recipe may translate its authored historical settings into source_evaluator;
-    it must not substitute current settings for missing historical versions.
-    """
-    if (
-        type(attempts) is not int
-        or attempts < 1
-        or type(source_attempt) is not int
-        or source_attempt < 0
-    ):
-        raise ReplayValidationError("Attempt counts/indexes must be valid integers")
+) -> tuple[TestCase, AttemptResult, CaseFingerprintScheme]:
+    """Verify source definitions/response independently of evaluator history."""
+    if type(source_attempt) is not int or source_attempt < 0:
+        raise ReplayValidationError("Invalid source attempt")
     SourceProvenance.safe_locator(database_locator)
     _unique([c.id for c in cases], "dataset case IDs")
     _unique([c.case_id for c in source.cases], "source case IDs")
@@ -566,6 +566,45 @@ def prepare_replay(
     attempt = matches_attempt[0]
     if attempt.response is None:
         raise ReplayValidationError("Source response is missing")
+    return by_id[case_id].model_copy(deep=True), attempt.model_copy(deep=True), scheme
+
+
+def prepare_replay(
+    source: RunResult,
+    cases: Sequence[TestCase],
+    scorer: JudgedScorer,
+    *,
+    judge_configuration: JudgeConfiguration,
+    database_locator: str,
+    case_id: str,
+    source_attempt: int,
+    attempts: int,
+    source_evaluator: EvaluatorConfiguration | None = None,
+    source_document_hash: str | None = None,
+    allow_reconfigured: bool = False,
+) -> PreparedReplay:
+    """Verify a saved response and dataset before preparing any provider request.
+
+    A recipe may translate its authored historical settings into source_evaluator;
+    it must not substitute current settings for missing historical versions.
+    """
+    if (
+        type(attempts) is not int
+        or attempts < 1
+        or type(source_attempt) is not int
+        or source_attempt < 0
+    ):
+        raise ReplayValidationError("Attempt counts/indexes must be valid integers")
+    case, attempt, scheme = _verify_source(
+        source,
+        cases,
+        database_locator=database_locator,
+        case_id=case_id,
+        source_attempt=source_attempt,
+    )
+    snapshot = source.config_snapshot
+    ids = [c.case_id for c in source.cases]
+    full_hash = snapshot.get("full_dataset_hash")
     if not scorer.projection_reviewed:
         raise ReplayValidationError("Replay requires a reviewed evidence projection")
     evaluator = EvaluatorConfiguration(
@@ -640,8 +679,8 @@ def prepare_replay(
     if differences and not allow_reconfigured:
         raise ReplayValidationError("Source evaluator is incompatible or unrecorded")
 
+    assert attempt.response is not None  # established by the shared source verifier
     response = attempt.response.model_copy(deep=True)
-    case = by_id[case_id].model_copy(deep=True)
     response_hash = fingerprint(response.model_dump(mode="json"))
     case_hash = hash_case_definition(case, scheme=scheme)
     mutation_hash = fingerprint(case.model_dump(mode="json"))
@@ -831,6 +870,10 @@ class ReplayResult(_Frozen):
 
 
 def validate_score(score: Score, config: dict[str, Any]) -> None:
+    if "output_validation" in config:
+        ScoreOutputContract.model_validate_json(
+            canonical_json(config["output_validation"])
+        ).check_score(score.value)
     threshold = config["pass_threshold"]
     passed = score.value >= threshold if threshold is not None else None
     if (

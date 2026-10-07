@@ -281,3 +281,15 @@ already bound human example. Historical v1 serialization and existing human
 bindings remain exact: no stored snapshots are backfilled, no golden hashes
 change, and no annotations or calibration artifacts are regenerated. This change
 does not alter calibration cohort/strata meanings or report calculations.
+
+## Prospective requests
+
+[Prospective judging](prospective-judging.md) can reuse this packet/freeze workflow
+with a strictly identified prospective preparation and observation policy. Its
+reserved review-set and observation IDs bind the complete protected roster before
+any judge factory is constructed. Historical and prospective preparations cannot
+share a manifest. Enabled judge output anchors must match the human scale; an
+absent judge anchor contract preserves legacy continuous scores and bindings.
+Prospective observations retain the existing exposure rules and agreement
+arithmetic, with `frozen_request_verified` proof after source/input and receipt
+verification. Historical artifact schemas and frozen human bindings are unchanged.

@@ -242,3 +242,12 @@ Legacy runs lacking a scheme remain v1. Missing legacy definition snapshots and
 source scheme fields remain omitted on serialization. Existing frozen run,
 replay, prompt/evidence and calibration hashes are unchanged; no artifact rewrite
 or human rebinding is required. Older readers must not resave v2 documents.
+
+## Prospective human-first evaluation
+
+An unjudged capture uses the separate [prospective judging API](prospective-judging.md),
+which registers a future evaluator and can enforce a complete human freeze before
+judge construction. It does not create a historical Score or relax replay's
+recorded-configuration checks. Optional `score-output-contract-v1` anchors are
+part of the evaluator fingerprint when enabled; legacy continuous configurations,
+prompts and replay documents retain their original representation.

@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import statistics
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Annotated, Any, Literal, Self
 from uuid import uuid4
 
@@ -24,6 +25,11 @@ from pydantic import (
 
 from harness.core.fingerprints import canonical_json, fingerprint
 from harness.core.models import RunResult, Score, ScorerKind, Verdict
+from harness.core.prospective import (
+    PreparedProspectiveJudgment,
+    ProspectiveJudgmentResult,
+    verify_freeze,
+)
 from harness.core.replay import (
     PreparedReplay,
     ReplayAttemptResult,
@@ -32,6 +38,9 @@ from harness.core.replay import (
     variance_summary,
 )
 from harness.judges.base import JudgeObservation
+from harness.scorers.output_contracts import ScoreOutputContract
+
+Preparation = PreparedReplay | PreparedProspectiveJudgment
 
 Number = Annotated[float, Field(strict=True, ge=0, le=1, allow_inf_nan=False)]
 Identifier = Annotated[str, Field(pattern=r"^[a-zA-Z0-9_-]{1,80}$")]
@@ -94,7 +103,7 @@ class RatingContract(Frozen):
         self.check_score(value)
         return value >= self.threshold if self.threshold is not None else None
 
-    def check_prepared(self, prepared: PreparedReplay) -> None:
+    def check_prepared(self, prepared: Preparation) -> None:
         config = json.loads(prepared.evaluator.scorer_json)
         for key in (
             "rubric",
@@ -109,10 +118,16 @@ class RatingContract(Frozen):
             "pass_threshold"
         ] or self.evidence_settings_json != canonical_json(config["evidence_settings"]):
             raise ValueError("Rating threshold/evidence settings differ")
+        if "output_validation" in config:
+            output = ScoreOutputContract.model_validate_json(
+                canonical_json(config["output_validation"])
+            )
+            if self.scale != "anchors" or self.anchors != output.anchors:
+                raise ValueError("Human and judge output anchors differ")
 
 
 class ObservationPolicy(Frozen):
-    kind: Literal["historical", "replay"]
+    kind: Literal["historical", "replay", "prospective"]
     artifact_id: Identifier
 
 
@@ -120,7 +135,7 @@ class CalibrationExample(Frozen):
     """Private identity snapshot. Never passed wholesale to a reviewer renderer."""
 
     example_id: Identifier
-    prepared: PreparedReplay
+    prepared: Preparation
     contract_hash: Digest
     nonce: Identifier
     binding_hash: Digest
@@ -137,13 +152,27 @@ class CalibrationExample(Frozen):
 
     @model_validator(mode="after")
     def valid(self) -> Self:
-        if (
-            self.prepared.compatibility != "matching_recorded_configuration"
-            or self.prepared.prepared.evidence_json is None
+        if self.prepared.prepared.evidence_json is None or (
+            isinstance(self.prepared, PreparedReplay)
+            and self.prepared.compatibility != "matching_recorded_configuration"
         ):
             raise ValueError(
                 "Calibration requires reviewed evidence and recorded matching configuration"
             )
+        if isinstance(self.prepared, PreparedProspectiveJudgment):
+            request = self.prepared
+            if (
+                self.observation_policy
+                != ObservationPolicy(
+                    kind="prospective", artifact_id=request.selection.observation_id
+                )
+                or not request.selection.requires_human
+                or request.selection.role != "primary"
+                or request.plan.rating_contract_hash != self.contract_hash
+            ):
+                raise ValueError("Prospective example policy/contract differs")
+        elif self.observation_policy.kind == "prospective":
+            raise ValueError("Historical input cannot claim prospective origin")
         if self.binding_hash != fingerprint(
             [self.nonce, self.example_id, self.identity_hash, self.contract_hash]
         ):
@@ -157,7 +186,7 @@ class CalibrationExample(Frozen):
 
 
 def make_example(
-    prepared: PreparedReplay,
+    prepared: Preparation,
     contract: RatingContract,
     policy: ObservationPolicy,
     *,
@@ -194,6 +223,16 @@ class CalibrationManifest(Frozen):
 
     @model_validator(mode="after")
     def valid(self) -> Self:
+        if len({type(e.prepared) for e in self.examples}) > 1:
+            raise ValueError("Mixed preparation workflows require separate manifests")
+        for e in self.examples:
+            if (
+                isinstance(e.prepared, PreparedProspectiveJudgment)
+                and e.prepared.plan.review_set_id != self.set_id
+            ):
+                raise ValueError(
+                    "Manifest differs from reserved prospective review set"
+                )
         ids = [e.example_id for e in self.examples]
         sources = [
             (
@@ -464,7 +503,7 @@ class JudgeObservationSet(Frozen):
         policy = example.observation_policy
         expected = (
             "frozen_request_verified"
-            if policy.kind == "replay"
+            if policy.kind in ("replay", "prospective")
             else "historical_input_reconstructed"
         )
         if (
@@ -482,6 +521,11 @@ class JudgeObservationSet(Frozen):
         ):
             raise ValueError("Judge observation binding/selection differs")
         for call in self.calls:
+            config = json.loads(example.prepared.evaluator.scorer_json)
+            if call.value is not None and "output_validation" in config:
+                ScoreOutputContract.model_validate_json(
+                    canonical_json(config["output_validation"])
+                ).check_score(call.value)
             if call.value is not None and call.passed is not (
                 call.value >= contract.threshold
                 if contract.threshold is not None
@@ -496,7 +540,9 @@ class JudgeObservationSet(Frozen):
                 raise ValueError("Actual judge prompt differs")
 
 
-def verify_rebuilt(example: CalibrationExample, rebuilt: PreparedReplay) -> None:
+def verify_rebuilt(example: CalibrationExample, rebuilt: Preparation) -> None:
+    if type(rebuilt) is not type(example.prepared):
+        raise ValueError("Preparation workflow differs")
     if rebuilt.model_dump(
         exclude={"requested_attempt_count"}
     ) != example.prepared.model_dump(exclude={"requested_attempt_count"}):
@@ -521,6 +567,44 @@ def replay_observations(
         contract_hash=example.contract_hash,
         artifact_id=result.replay_id,
         artifact_hash=fingerprint(result.model_dump(mode="json")),
+        verification="frozen_request_verified",
+        calls=tuple(
+            JudgeCall(
+                index=a.index,
+                value=a.score.value if a.score else None,
+                passed=a.score.passed if a.score else None,
+                reason=a.score.reason if a.score else None,
+                error=a.error,
+                observation=a.observation,
+                prompt_hash=a.prompt_hash,
+            )
+            for a in result.attempts
+        ),
+    )
+
+
+def prospective_observations(
+    example: CalibrationExample,
+    result: ProspectiveJudgmentResult,
+    rebuilt: PreparedProspectiveJudgment,
+    *,
+    frozen_bundle: Path,
+) -> JudgeObservationSet:
+    """Join a reserved primary observation only after source and receipt proof."""
+    verify_rebuilt(example, rebuilt)
+    result = ProspectiveJudgmentResult.model_validate_json(result.model_dump_json())
+    verify_rebuilt(example, result.input)
+    proof = verify_freeze(result.input, frozen_bundle)
+    if result.freeze != proof or example.observation_policy != ObservationPolicy(
+        kind="prospective", artifact_id=result.observation_id
+    ):
+        raise ValueError("Unselected observation or changed freeze receipt")
+    return JudgeObservationSet(
+        example_id=example.example_id,
+        identity_hash=example.identity_hash,
+        contract_hash=example.contract_hash,
+        artifact_id=result.observation_id,
+        artifact_hash=result.digest,
         verification="frozen_request_verified",
         calls=tuple(
             JudgeCall(
