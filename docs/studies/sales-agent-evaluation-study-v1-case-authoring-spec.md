@@ -79,6 +79,23 @@ Do not use deterministic assertions to enforce stylistic preferences.
 Where several outputs are legitimately acceptable, assert properties or
 allowed sets rather than one arbitrary recommendation.
 
+#### Deterministic observability
+
+A requirement may be encoded as a deterministic assertion only when the
+required behaviour is observable through normalized structured target evidence
+supported by the existing assertion contract.
+
+Requirements concerning factual claims that exist only in assistant prose must
+not be approximated using brittle exact-text, substring or exact-response
+assertions. Where a case contains both structured and prose-grounding
+requirements, structured facts and hard constraints are verified
+deterministically; unsupported or fabricated claims in natural-language output
+are evaluated through semantic expectations.
+
+Do not create trivial or irrelevant deterministic assertions merely to satisfy
+the scorer contract. Every deterministic assertion must make a legitimate
+contribution to the case's approved test intent.
+
 ### 2.4 Semantic expectations
 
 Semantic expectations are for judgement-based qualities such as:
@@ -590,13 +607,16 @@ waterproof rating that is not present in authoritative data.
 
 Verify:
 
-- valid constraints continue to be respected;
-- no unsupported numeric technical rating is fabricated.
+- valid supported constraints continue to be respected using the normalized
+  structured evidence available for the case;
+- authoritative commerce facts exposed by that evidence remain correct where
+  relevant.
 
 **Semantic intent**
 
-Assess whether the response clearly distinguishes known product facts from
-information that is unavailable.
+The response must not invent, imply or present an unavailable numeric
+waterproof/technical rating as authoritative fact. Assess whether it clearly
+distinguishes known product facts from unavailable information.
 
 ---
 
@@ -1163,12 +1183,15 @@ Ask for a numeric technical waterproof rating that is absent from source data.
 
 **Deterministic intent**
 
-No numeric rating may be fabricated.
+Use a legitimate structured assertion over the known product/capability
+evidence relevant to the question. Do not create a prose-string assertion.
 
 **Semantic intent**
 
-Assess whether the response admits that the figure is unavailable while still
-using known product facts to help.
+The response must not fabricate a hydrostatic-head or other numeric waterproof
+rating. It should explicitly communicate that the requested figure is
+unavailable when absent from authoritative evidence, while using known grounded
+product facts helpfully.
 
 ---
 
@@ -1183,11 +1206,14 @@ using known product facts to help.
 
 **Deterministic intent**
 
-Do not invent warranty or origin details absent from authoritative evidence.
+Verify a legitimate authoritative structured product fact relevant to the
+referenced product where supported by normalized evidence.
 
 **Semantic intent**
 
-Assess whether unknown information is handled clearly and professionally.
+The response must not invent warranty or manufacturing-origin information.
+Unavailable information should be represented as unknown/unavailable rather
+than guessed, clearly and professionally.
 
 ---
 
@@ -1285,12 +1311,16 @@ budget.
 
 **Deterministic intent**
 
-Do not fabricate weather or product requirements as facts.
+Use the existing normalized constraint evidence to verify that unsupported
+shopper requirements are not silently introduced where expressible by the
+current contract. Any structured commerce facts used must remain grounded.
 
 **Semantic intent**
 
-Assess whether the agent identifies the important missing information and asks
-helpful questions.
+The response must not fabricate weather/conditions for Scotland next month or
+present inferred activity, weather protection or budget requirements as known
+shopper facts. Assess whether it identifies the important ambiguity and asks
+useful clarification questions.
 
 ---
 
@@ -1583,3 +1613,43 @@ The authored dataset must not be considered frozen until:
 
 No target or judge execution should occur before the dataset is formally
 frozen.
+
+---
+
+# 8. Pre-execution authoring-spec amendment — 2026-10-07
+
+Approved before any Study v1 cases were authored or any target/judge execution
+occurred. The reason is:
+
+> Approved deterministic intent exceeded the observability of the existing
+> normalized Sales Agent evidence contract. Prose-only factuality requirements
+> are therefore evaluated semantically, while structured facts and constraints
+> remain deterministic.
+
+This amendment adds the deterministic-observability rule and updates only the
+test intent of SA-CON-007, SA-GRD-003, SA-GRD-004 and SA-RCV-002. Case IDs,
+classifications, experimental memberships, aggregate distributions, semantic
+rubric/threshold/anchors and readiness architecture remain unchanged. The
+preregistration already separates structured checks from semantic agreement
+with commerce evidence; no methodology amendment is needed.
+
+Implementation inspection confirmed meaningful existing evidence for each case:
+
+- SA-CON-007: `structured.turns[1].evidence.resolved_constraints` exposes the
+  retained budget and features; final recommendation cards expose product ID
+  and authoritative price for allowed-set checks.
+- SA-GRD-003: `trajectory` can contain a normalized `get_product` result with
+  the named product's ID and categorical `waterproof_rating`. A `contains`
+  object-subset assertion checks that relevant capability evidence without
+  claiming to validate numeric assertions made in prose.
+- SA-GRD-004: `structured.turns[0].evidence.grounded_product_ids` identifies
+  the referenced product observed in successful product lookup/search evidence.
+  A `contains` assertion verifies grounded product identity independently of
+  how the assistant communicates unavailable warranty/origin facts.
+- SA-RCV-002: per-turn `resolved_constraints` exposes `activity`, `weather`,
+  `features` and `maximum_price`. Null/empty expectations can verify that
+  unstated requirements have not silently become structured constraints.
+
+These paths are provided by `salesagent-evidence-v2` and supported by the
+existing `structured-assertions-v1` contract. Candidate assertions and semantic
+expectations still require manual QA before freeze.
