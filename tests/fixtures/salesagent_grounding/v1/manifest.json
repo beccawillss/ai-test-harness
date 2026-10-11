@@ -1,0 +1,30 @@
+{
+  "counts": {
+    "acceptance_text_fixtures": 8,
+    "development_text_fixtures": 16,
+    "error_fixtures": 8,
+    "text_fixtures": 24
+  },
+  "diagnostic_contract": "salesagent-waterproof-diagnostic-v1",
+  "files": {
+    "cases.jsonl": "1bfb96ec6a381ed313db86957e03843cdf7a020363793e9bb7bd04d75a19f5ce",
+    "expected.jsonl": "8682d235f38e90ab5ab78a79ba0d7c97c28a3ddc5d27e592dc52753dbc67e962"
+  },
+  "independent_review": {
+    "approved_files": {
+      "cases.jsonl": "1bfb96ec6a381ed313db86957e03843cdf7a020363793e9bb7bd04d75a19f5ce",
+      "expected.jsonl": "8682d235f38e90ab5ab78a79ba0d7c97c28a3ddc5d27e592dc52753dbc67e962"
+    },
+    "reviewed_at": "2026-10-11T11:30:00+01:00",
+    "reviewer": "Rebecca Williams",
+    "decision": "APPROVED",
+    "candidate_revision": "candidate-1",
+    "review_file": "independent-review.md",
+    "review_sha256": "dfbe8ac2c315623800e6c6769359e3044d699cf798e71ab7a807ab1ffd61fa31"
+  },
+  "revision": "candidate-1",
+  "schema_version": "salesagent-waterproof-corpus-v1",
+  "source": "Authored synthetic examples; no Study v1 outputs or target invocation.",
+  "status": "frozen",
+  "synthetic": true
+}
