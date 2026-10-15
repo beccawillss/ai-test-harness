@@ -2,14 +2,17 @@
 
 ## Status and authorization
 
-Milestone 1 only is authorized. Architecture is approved in principle; the user
-subsequently approved the exact workspace path, branch name and pinned main base.
-The user has authorized committing the reviewed corpus, documentation and manifest
-on this dedicated feature branch. The user additionally authorized pushing the
-branch and creating a draft pull request against main, then explicitly approved
-amending the existing commit and preserving the signed Markdown hard breaks.
-Milestones 2 and 3, implementation and merge remain unauthorized.
-This plan is a living record of the bounded slice, not a source implementation.
+Milestone 1 is reviewed, frozen and merged into main by PR #12. On 12 October
+2026 the user explicitly authorized Milestone 2 implementation and offline
+verification. After reviewing the completed Milestone 2 handoff, the user
+approved the implementation and authorized a focused commit and branch push.
+Merge and Milestone 3 remain unauthorized. The frozen inputs, labels, manifest
+and signed review must remain unchanged.
+
+Implementation uses the existing isolated grounding worktree, on dedicated
+branch `feat/salesagent-grounding-v1-m2` from merged main
+`d0e75e99afe4ce03983140c276fb402f328eb7df`. The separate Study v1 checkout remains
+protected. This authorization supersedes the historical gates recorded below.
 
 Approved workspace:
 
@@ -63,8 +66,10 @@ only for supported grammar with raw counts and the small corpus limitation.
 - [x] User approval of corpus freeze.
 - [x] Mark the exact reviewed corpus frozen and verify its integrity.
 - [x] User authorization to commit the reviewed corpus, documentation and manifest.
-- [ ] Explicit Milestone 2 source-implementation authorization.
-- [ ] Milestone 2 implementation (not authorized).
+- [x] Explicit Milestone 2 source-implementation authorization.
+- [x] Milestone 2 implementation and offline verification.
+- [x] Human review and approval of the Milestone 2 implementation.
+- [x] User authorization to commit and push Milestone 2.
 - [ ] Milestone 3 example/documentation/compatibility acceptance (not authorized).
 
 ## File map
@@ -109,10 +114,10 @@ left to a future implementer to invent.
 No synthetic authority review field attests independent human review. The corpus
 manifest was pending at authoring handoff; the subsequent human review now approves
 all 32 IDs and the exact input/label hashes. The user has approved the corpus
-freeze and the bounded artifact commit. Explicit source implementation
-authorization remains pending.
+freeze, bounded artifact commit and subsequent merge. Milestone 2 source
+implementation is authorized by the 12 October instruction.
 
-### Milestone 2: bounded response-to-report path (not authorized)
+### Milestone 2: bounded response-to-report path (implemented; approved)
 
 Expected new `src/harness/packs/salesagent_grounding.py` and
 `tests/test_salesagent_grounding.py`. Planned public entry point takes
@@ -190,10 +195,11 @@ to the seven Milestone 1 files; no source or Study v1 files may change.
 An approved worktree shares Git objects/refs but has its own working files/index.
 Its creation changes shared worktree metadata; it does not move original work.
 Never reset, stash, clean, stage, delete a branch, or remove either worktree as
-an automatic cleanup. Only the eight reviewed artifacts listed above may be
-staged and committed under the subsequent user authorization. The approved
-commit amendment, branch push and draft pull request are permitted. No other
-history rewrite, merge or live run is authorized.
+an automatic cleanup. The eight reviewed artifacts were committed and merged
+under the earlier approvals. Milestone 2 permits the new pack module, focused
+tests and living-plan updates only. The subsequent user approval permits staging
+and committing those three files and pushing the dedicated branch. No history
+rewrite, merge or live run is authorized.
 
 ## Human gates and open questions
 
@@ -210,9 +216,10 @@ turn-1 lookup and does not isolate earlier-only tool evidence reuse. Real-source
 authority/completeness requires separate review; no production authority manifest
 is fabricated by Milestone 1.
 
-Milestone 2 needs explicit authorization after corpus review. The reviewed
-artifact commit is authorized; Milestone 3, further commits and integration need
-their own authorization. Broadening claim families,
+Milestone 2 implementation is complete and approved for its focused commit and
+branch push. Milestone 3, subsequent commits and integration need their own
+authorization.
+Broadening claim families,
 adding LLM extraction, gates or target-side changes is a new proposal. Study v1
 live outputs must never tune this diagnostic.
 
@@ -327,3 +334,142 @@ Fresh pre-publication validation:
 
 These checks establish artifact consistency and existing-engine compatibility,
 not detector performance. No detector or Milestone 2 implementation was started.
+
+### Milestone 2 preflight (12 October 2026)
+
+- Read AGENTS.md, this plan, specification, ADR, corpus/review, existing model,
+  fingerprint utilities, adapter projection and semantic pack/tests.
+- Clean grounding worktree at merged main; dedicated M2 branch created.
+- Frozen input/label/review hashes and all 34 protected hashes verified.
+- Structural probe passes all 32 pairs, 117 spans and review bindings.
+- Baseline Ruff lint passes. Ruff format reproduces the three documented files.
+  Expanded mypy reproduces exactly the nine documented study-example errors.
+- Planned changes: one pack module, one focused test module and this living plan.
+  No frozen artifacts or existing engine/Study v1 files will change.
+- Engineering reasons outside the corpus are explicit: authority_missing,
+  authority_unbound, authority_unreviewed, authority_not_applicable and
+  authority_incomplete. Boundary tests exercise these without adding scored
+  language examples or revising the frozen oracle.
+
+### Milestone 2 implementation and review handoff
+
+Changes are limited to `src/harness/packs/salesagent_grounding.py`,
+`tests/test_salesagent_grounding.py`, and this plan. No approved input, expected
+label, manifest, signed review, specification or ADR was edited. No existing
+TargetResponse, runner, scorer, target adapter, Study v1 or persistence code changed.
+
+Implementation decisions:
+
+- One pure pack entry point returns a separate GroundingDiagnosticReport;
+  there is no Score, quality verdict, runner hook, target call or persistence.
+- Strict context validation raises GroundingConfigurationError at the entry
+  point. Authority remains a JSON envelope so malformed supplied evidence can
+  become a safe report error instead of an eager model-construction exception.
+- Envelope/version validation precedes authority integrity and field semantics;
+  turn errors preserve unaffected turns. Only defined evidence exceptions are
+  caught. Programming errors propagate. Error bodies contain codes and pointers,
+  never raw exceptions/provider payloads. Each source content is bounded to 1 MiB;
+  this bound and grammar/exclusions are recorded in configuration provenance.
+- Detection uses the bounded reviewed clause forms and original Unicode offsets.
+  Decimal conversion is exact, including values longer than the ambient default
+  precision. Categories are never converted to numbers. Identity and evidence
+  applicability are evaluated per turn, with no state shared across calls.
+- Runtime candidates retain every eligible identity reference separately from
+  the primary subject reference in the frozen semantic projection. Source text,
+  context, configuration, response/authority/projection hashes and an optional
+  caller-supplied harness revision support deterministic report round-trips.
+- Reviewed `human` and synthetic `synthetic_simulation` authority review kinds
+  are recognized; real contexts reject simulated review. Unreviewed/pending
+  references and null bindings stay indeterminate. Missing fact-level bindings
+  for applicable source facts prevent a claim of definitive agreement/absence.
+  These are conservative evidence-boundary rules, not new language families.
+
+Focused verification covers all 32 exact frozen projections plus engineering
+boundaries: missing/null/open/unreviewed/unbound authority, authority conflicts,
+invalid types/values/hashes/versions/pointers (including oversized indices),
+real/simulated review separation, partial and all-turn failures, prior-only
+identity reuse, future-evidence exclusion, duplicate names, failed tools,
+search-products provenance, repeated-attempt isolation, input immutability,
+canonical round-trips, safe errors, source/configuration hashes, numeric and
+whitespace boundaries, and a saved response produced by the existing adapter
+with its offline fake transport. No new scored natural-language corpus was added.
+
+Measured frozen-corpus results (visible, authored examples only):
+
+| Measure | Development | Acceptance |
+| --- | --- | --- |
+| Exact text projections | 16/16 | 8/8 |
+| Exact error projections | N/A (none) | 8/8 |
+| Detection TP / FP / FN | 9 / 0 / 0 | 6 / 0 / 0 |
+| Supported-grammar precision | 9/9 | 6/6 |
+| Supported-grammar recall | 9/9 | 6/6 |
+| Matched value/unit, subject and span correctness (each) | 9/9 | 6/6 |
+| Comparator agreement with gold extraction, including exclusions | 16/16 | 8/8 |
+| Indeterminate among exact affirmative claims | 1/9 | 2/6 |
+| Candidate abstention (union, no double counting) | 4/16 | 0/8 |
+| Recognized hedge/range/shorthand challenges | 3/3 | N/A (none) |
+| Correct exclusions | 4/4 | 2/2 |
+
+Overall: all 32 frozen fixtures agree exactly; all 15 eligible exact affirmative
+claims are detected. Findings remain six supported, three contradicted, three
+unsupported, six indeterminate and six exclusions, plus eight separate execution
+errors. Empty denominators are N/A, not assumed perfect performance.
+
+Further evaluation before claiming broader language performance: a separately
+reviewed, blinded challenge set with varied phrasing, punctuation, product names,
+quotations/endorsement, multi-claim text and unsupported units; independently
+reviewed real source/revision/completeness/deployment bindings; and larger-input
+resource/performance testing. Expanded language expectations need a reviewed
+corpus/contract revision. S06's existing fresh-lookup limitation remains; an
+engineering test now separately verifies earlier-only identity reuse, without
+changing S06 or claiming that the agent received numeric facts.
+
+Known limitations: narrow English clause recognition, no pronoun/fuzzy/multi-
+product inference, no scientific truth or measured agent grounding, no guarantee
+that unrecognized paraphrases produce abstentions, and a visible small synthetic
+acceptance set. No additional dependencies or live services were introduced.
+Milestone 3 examples/CLI/persistence and any commit/push/merge remain unauthorized.
+
+Final verification on the implementation handed off for review:
+
+- Focused offline tests: **171 passed in 0.29 seconds**.
+- Full offline suite: **1,639 passed in 63.17 seconds** (1,468 existing plus 171
+  new tests). Both use `PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src`, the original
+  installed `.venv/bin/python`, and `pytest -q -p no:cacheprovider` from the
+  grounding worktree. The focused command additionally selects
+  `tests/test_salesagent_grounding.py`. Network blocking remains enabled.
+- `ruff check --no-cache .`: passes. `ruff format --check --no-cache` on the two
+  new Python files passes. The full format check reproduces only the three
+  baseline findings in `docs/test-taxonomy-and-suites.md`,
+  `src/harness/targets/base.py`, and `tests/test_dataset.py`.
+- `mypy --cache-dir=/dev/null src/`: passes, 39 source files. Expanded
+  `mypy --cache-dir=/dev/null src/ examples/` reproduces exactly the nine baseline
+  errors in unchanged `examples/salesagent_study.py` (45 files checked).
+- The last inspection fixed oversized local-pointer indices escaping as Python
+  conversion errors and malformed reviewer identities on unreviewed evidence;
+  regression tests cover both. The final full suite includes these fixes.
+- Frozen corpus/review hashes match; all original tracked files other than this
+  plan are byte-identical to merged main. Original Study v1 branch/HEAD/status
+  and all 34 protected candidate/historical artifact hashes remain unchanged.
+- Working branch: `feat/salesagent-grounding-v1-m2`, still based at
+  `d0e75e99afe4ce03983140c276fb402f328eb7df`. No staging, commit, push, merge,
+  dependency installation, live service or Milestone 3 work was performed.
+
+Milestone 2 is ready for human review. Its implementation and new boundary
+reason labels have not been independently approved by the corpus reviewer;
+Milestone 1 approval applies to the unchanged frozen oracle only.
+
+### Milestone 2 approval and publication authorization
+
+The user reviewed the completed handoff and stated: "this is approved and ready
+to commit and push". This approves the Milestone 2 implementation for a focused
+commit and push on `feat/salesagent-grounding-v1-m2`; it does not authorize merge,
+Milestone 3 or live evaluation. No additional independent corpus review is implied.
+
+Pre-commit verification confirms that implementation and tests are byte-identical
+to the tested handoff (171 focused and 1,639 full offline tests passed). Only this
+plan's authorization record is updated. Frozen corpus and signed-review hashes,
+all other existing tracked files, and the separate Study v1 state and 34 protected
+artifact hashes remain unchanged. The earlier baseline Ruff-format and expanded
+mypy findings remain unchanged. No code changed, so the test suite was not rerun
+for this authorization-only update.
