@@ -2,17 +2,24 @@
 
 ## Status and authorization
 
-Milestone 1 is reviewed, frozen and merged into main by PR #12. On 12 October
-2026 the user explicitly authorized Milestone 2 implementation and offline
-verification. After reviewing the completed Milestone 2 handoff, the user
-approved the implementation and authorized a focused commit and branch push.
-Merge and Milestone 3 remain unauthorized. The frozen inputs, labels, manifest
-and signed review must remain unchanged.
+Milestones 1 and 2 are reviewed, approved and merged into main by PRs #12 and
+#13. On 15 October 2026 the user authorized Milestone 3 only: an offline CLI,
+usage documentation and compatibility/regression verification. After final review
+and the requested refinements, the user explicitly authorized committing, pushing
+and merging Milestone 3 into main. Additional milestones and live evaluation remain
+outside scope. The frozen inputs, labels, manifest and signed review are unchanged.
 
-Implementation uses the existing isolated grounding worktree, on dedicated
-branch `feat/salesagent-grounding-v1-m2` from merged main
-`d0e75e99afe4ce03983140c276fb402f328eb7df`. The separate Study v1 checkout remains
-protected. This authorization supersedes the historical gates recorded below.
+The user has approved the overall Milestone 3 usage-documentation structure and
+requested minor refinements: S01 expected output, explicit Python-environment
+guidance, current milestone statuses and verification of documented exit codes.
+The refinements are complete and Milestone 3 has final human acceptance.
+
+Milestone 3 uses `/private/tmp/ai-test-harness-grounding-m3`, on dedicated branch
+`feat/salesagent-grounding-v1-m3-cli` from fetched main
+`0c7a52da98b5e2661ebad02cd3eb42e6dcd9f220`. The existing grounding worktree and
+separate Study v1 checkout remain protected. This authorization supersedes the
+historical gates recorded below. The temporary worktree permits isolated writes
+within this session's filesystem boundary; neither existing worktree is switched.
 
 Approved workspace:
 
@@ -70,11 +77,15 @@ only for supported grammar with raw counts and the small corpus limitation.
 - [x] Milestone 2 implementation and offline verification.
 - [x] Human review and approval of the Milestone 2 implementation.
 - [x] User authorization to commit and push Milestone 2.
-- [ ] Milestone 3 example/documentation/compatibility acceptance (not authorized).
+- [x] User authorization for Milestone 3 only; verify M2 in latest main.
+- [x] Milestone 3 offline example and usage documentation.
+- [x] Milestone 3 compatibility/regression verification.
+- [x] Human review and acceptance of Milestone 3.
+- [x] User authorization to commit, push and merge Milestone 3.
 
 ## File map
 
-All Milestone 1 files are new in the isolated worktree:
+Milestone 1 created the following files (now merged into main):
 
 | File | Purpose |
 | --- | --- |
@@ -87,14 +98,15 @@ All Milestone 1 files are new in the isolated worktree:
 | `tests/fixtures/salesagent_grounding/v1/manifest.json` | Versions, splits/counts, byte checksums, approved review |
 | `tests/fixtures/salesagent_grounding/v1/independent-review.md` | Unchanged signed human review, added during review finalisation |
 
-No existing repository file should change. No package modules, executable tests,
-CLI, scorer integration, source schema classes or output generators are part of
-Milestone 1. Temporary authoring/validation probes are not a detector and are
-not repository implementation artifacts.
+Milestone 1 changed no pre-existing repository files and included no package
+modules, executable tests, CLI, scorer integration, source schema classes or
+output generators. Its temporary authoring/validation probes were not a detector
+or repository implementation artifacts. Later milestone files and verification
+are recorded below.
 
 ## Milestone sequence
 
-### Milestone 1: contract and review corpus (authorized)
+### Milestone 1: contract and review corpus (approved; merged)
 
 Create only the file map above. The diagnostic report is separate from Score and
 study verdicts. Define temporal projection, claim/slot spans, bounded grammar,
@@ -117,10 +129,10 @@ all 32 IDs and the exact input/label hashes. The user has approved the corpus
 freeze, bounded artifact commit and subsequent merge. Milestone 2 source
 implementation is authorized by the 12 October instruction.
 
-### Milestone 2: bounded response-to-report path (implemented; approved)
+### Milestone 2: bounded response-to-report path (approved; merged)
 
-Expected new `src/harness/packs/salesagent_grounding.py` and
-`tests/test_salesagent_grounding.py`. Planned public entry point takes
+Implemented `src/harness/packs/salesagent_grounding.py` and
+`tests/test_salesagent_grounding.py`. The public entry point takes
 TargetResponse, context and optional reviewed authority; returns a separate
 GroundingDiagnosticReport. Internal projection/detection/resolution/comparison
 functions are pure. No Scorer implementation, runner integration or model change.
@@ -134,15 +146,18 @@ require corpus review, not tuning labels to detector output. Record precision,
 recall, false positives/negatives, abstention and gold-extraction comparison
 correctness separately; never claim broad detection accuracy from these fixtures.
 
-### Milestone 3: offline usage and compatibility (not authorized)
+### Milestone 3: offline usage and compatibility (approved for publication and merge)
 
-Expected new `examples/salesagent_grounding.py` and usage documentation; update
-this new specification/plan as appropriate. A thin example may consume explicit
-saved response/authority JSON and emit diagnostics to stdout. It must create no
+Implemented `examples/salesagent_grounding.py`, usage documentation and CLI tests;
+the specification/plan are updated as appropriate. The thin example consumes
+explicit saved response/context/authority JSON and emits diagnostics to stdout.
+It must create no
 target/judge client or live-service option. Do not modify saved runs or study
 profiles. Full tests/static checks and protected artifact hashes must retain
 their prior meaning. Findings are not process quality gates; execution errors
 are distinct. Seek human acceptance before any commit/integration action.
+
+Implementation and usage: [offline CLI guide](../salesagent-grounding-offline.md).
 
 ## Verification strategy
 
@@ -157,11 +172,12 @@ Check Markdown relative links, whitespace, final newlines and balanced fences.
 
 Use the original existing `.venv` without installation. Set PYTHONPATH explicitly
 to this worktree's `src` and disable bytecode/pytest caches. This avoids silently
-testing the original checkout through its editable install. The pinned main
-baseline has 1,468 tests; the original checkout's extra 77 candidate-study tests
+testing the original checkout through its editable install. The M1 pinned-main
+baseline had 1,468 tests; M3's merged-M2 baseline has 1,639. The original
+checkout's extra 77 candidate-study tests
 are intentionally not copied here. Existing offline tests block socket access.
 
-Commands for implementation acceptance (focused test file is future work):
+Commands for implementation acceptance:
 
 ```sh
 PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src /Users/rebeccawilliams/Developer/ai-test-harness/.venv/bin/python -m pytest -q -p no:cacheprovider
@@ -171,7 +187,8 @@ PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src /Users/rebeccawilliams/Developer/ai-tes
 /Users/rebeccawilliams/Developer/ai-test-harness/.venv/bin/mypy --cache-dir=/dev/null src/ examples/
 ```
 
-M2 must additionally run focused pytest on the new test module and format/type
+Focused pytest selects `tests/test_salesagent_grounding.py` and
+`tests/test_salesagent_grounding_example.py`; additionally run format/type
 checks on new source/examples. Do not install missing tooling or invoke live
 services. Any inaccessible check must be reported, not presented as passed.
 
@@ -189,17 +206,19 @@ candidate file hashes recorded. Also recorded the historical baseline/semantic
 datasets, preregistration, study matrix and all 20 existing files under runs:
 34 files total. Do not open stores for writing or copy local run files into this
 worktree. At completion compare exact hashes, original HEAD/branch/status, and
-new worktree tracked diff. Review finalisation adds the unchanged signed review
-to the seven Milestone 1 files; no source or Study v1 files may change.
+new worktree tracked diff. M1 review finalisation added the unchanged signed review
+to the seven Milestone 1 files. M3 preserves source and Study v1 files; only the
+new example/tests, usage documentation and specification/plan wording are in scope.
 
 An approved worktree shares Git objects/refs but has its own working files/index.
 Its creation changes shared worktree metadata; it does not move original work.
 Never reset, stash, clean, stage, delete a branch, or remove either worktree as
 an automatic cleanup. The eight reviewed artifacts were committed and merged
-under the earlier approvals. Milestone 2 permits the new pack module, focused
-tests and living-plan updates only. The subsequent user approval permits staging
-and committing those three files and pushing the dedicated branch. No history
-rewrite, merge or live run is authorized.
+under the earlier approvals. Milestone 2's separate authorization permitted its
+pack module, focused tests and living-plan updates, followed by its approved
+commit/push and subsequent merge. The user's subsequent final M3 approval now
+authorizes its focused staging, commit, push and merge into main. History rewrite,
+branch deletion, worktree removal and live runs remain outside scope.
 
 ## Human gates and open questions
 
@@ -216,14 +235,18 @@ turn-1 lookup and does not isolate earlier-only tool evidence reuse. Real-source
 authority/completeness requires separate review; no production authority manifest
 is fabricated by Milestone 1.
 
-Milestone 2 implementation is complete and approved for its focused commit and
-branch push. Milestone 3, subsequent commits and integration need their own
-authorization.
+Milestone 2 is complete, approved and merged. Milestone 3 implementation and
+the requested minor refinements have final human acceptance; its focused commit,
+push and merge are explicitly authorized.
 Broadening claim families,
 adding LLM extraction, gates or target-side changes is a new proposal. Study v1
 live outputs must never tune this diagnostic.
 
 ## Verification log
+
+Entries below record approvals and restrictions at each historical handoff.
+The current authorization is stated at the top of this plan; earlier statements
+that Milestones 2 or 3 were unauthorized describe their status at that time.
 
 Milestone 1 authoring verification at original handoff (review was then pending):
 
@@ -473,3 +496,168 @@ all other existing tracked files, and the separate Study v1 state and 34 protect
 artifact hashes remain unchanged. The earlier baseline Ruff-format and expanded
 mypy findings remain unchanged. No code changed, so the test suite was not rerun
 for this authorization-only update.
+
+### Milestone 3 implementation and review handoff (15 October 2026)
+
+Preflight read AGENTS.md, this plan, the specification, ADR 0008 and existing
+pack/model/adapter test contracts. A fresh `git fetch origin main` confirmed
+local main and origin/main at `0c7a52da98b5e2661ebad02cd3eb42e6dcd9f220`;
+Milestone 2 commit `0648343` is an ancestor, merged by PR #13. The original
+checkout remained on `feat/salesagent-study-v1-cases` at `50c2a50`; the existing
+grounding worktree was clean on `feat/salesagent-grounding-v1-m3` at merged main.
+The new isolated branch/worktree named above was created from fetched main.
+No existing branch was switched, rebased, reset or otherwise rewritten.
+
+Files in this slice:
+
+- New `examples/salesagent_grounding.py`: explicit response/context/authority
+  file inputs, strict finite UTF-8 JSON parsing with duplicate-key rejection,
+  normalized envelope/context validation, existing pack invocation and canonical
+  report JSON on stdout. Authority may explicitly be JSON null. No automatic
+  authority lookup, client, credentials, store access or live mode exists.
+- New `docs/salesagent-grounding-offline.md`: command, input contract, synthetic
+  smoke example, output/exit semantics, uncertainty and limitations.
+- New `tests/test_salesagent_grounding_example.py`: 70 offline CLI tests,
+  including all 32 unchanged frozen semantic projections.
+- This living plan: authorization, workspace, progress and verification record.
+
+Exit 0 means complete execution even for contradicted, unsupported, indeterminate
+or excluded findings. Exit 1 accompanies partial/error reports; unaffected turns
+are retained. Exit 2 indicates argument, file, JSON, normalized-envelope or
+context errors before a report is available. Safe diagnostics omit raw input,
+paths and underlying exception messages. Programming errors propagate. These
+execution codes introduce no quality gate or runner verdict. The CLI validates
+the serialized envelope strictly, rejecting unknown fields rather than silently
+discarding them; evidence inside a valid envelope follows the unchanged pack's
+report-error semantics. Synthetic authority is never silently used as real review.
+
+Actual verification on the completed implementation, using the original
+installed `.venv/bin` tooling without installation:
+
+- Focused pytest: **241 passed in 0.78 seconds**, selecting
+  `tests/test_salesagent_grounding.py` and
+  `tests/test_salesagent_grounding_example.py`.
+- Full offline pytest: **1,709 passed in 65.21 seconds** (1,639 existing plus
+  70 CLI tests). Both commands use `PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src`,
+  `python -m pytest -q -p no:cacheprovider`, and this worktree as cwd. Existing
+  network blocking remains enabled. CLI import/execution tests additionally
+  forbid target, judge, runner, store, prospective and provider-client imports.
+- All 32 frozen semantic projections pass through both pack and CLI; frozen
+  input/label/signed-review SHA-256 bindings pass unchanged. Supported-grammar
+  metrics retain M2's 9/9 development and 6/6 acceptance detections with zero
+  FP/FN. This remains visible synthetic conformance, not broad language accuracy.
+- Compatibility coverage includes existing saved real-adapter responses produced
+  with fake transport, serialization round-trips, repeated-attempt isolation,
+  Study v1 methodology/fingerprint checks, semantic comparisons, runner verdicts
+  and persistence tests in the full suite. CLI tests additionally verify repeatable
+  canonical output, byte-identical inputs, explicit absent authority, partial
+  errors, response hash mismatch and rejection of simulated review in real context.
+- `ruff check --no-cache .`: passes. Focused `ruff format --check --no-cache`
+  on all four changed files passes. Full format check reproduces exactly the
+  pre-implementation findings in `docs/test-taxonomy-and-suites.md`,
+  `src/harness/targets/base.py` and `tests/test_dataset.py`; no new findings.
+- `mypy --cache-dir=/dev/null src/`: passes, 39 files. The same command with
+  `src/ examples/salesagent_grounding.py` passes, 40 files. Expanded
+  `src/ examples/` reproduces exactly the nine pre-implementation errors in
+  unchanged `examples/salesagent_study.py`, 46 files checked. These baseline
+  failures are preserved, not fixed outside scope.
+- The documented synthetic smoke shell block executes successfully: complete
+  report, one supported reference-agreement finding. It extracts copies into a
+  fresh temporary directory; no corpus or saved run is overwritten.
+- Changed-file UTF-8, final-newline, trailing-whitespace, Markdown-fence and
+  relative-file-link checks pass. Original Study checkout branch/HEAD/status
+  and all **154** snapshotted tracked/untracked/historical file hashes match.
+  The existing grounding worktree remains clean at its original HEAD. Every
+  tracked file in the new worktree except this plan is byte-identical to fetched
+  main, including the pack, frozen corpus/review/specification/ADR, datasets,
+  core engine, Study v1, semantic rubrics and historical artifacts.
+
+No architecture or frozen-contract change was needed. The sole workspace
+adjustment was a new temporary worktree within the writable filesystem boundary
+instead of editing the already existing grounding worktree. No dependency install,
+live evaluation, paid service, saved-input mutation, staging, commit, push, merge
+or additional milestone was performed.
+
+Limitations remain those of the approved v1 grammar/reference policy: unknown
+paraphrases can be missed, agent grounding is not assessed, real source authority
+requires separate review, and a small visible synthetic corpus does not establish
+general accuracy. The example processes one explicit normalized response at a
+time; it does not import whole runs/JSONL or provide store integration. Whole-file
+JSON loading is intended for saved evaluation artifacts, not unbounded bulk data.
+
+All Milestone 3 implementation and verification criteria are satisfied, with
+the explicitly recorded pre-existing engineering-check failures. Human review
+and acceptance remain pending. Stop here; no commit or integration is authorized.
+
+### Milestone 3 documentation refinements and exit-code verification
+
+Following review, the user approved the usage guide's overall structure and
+requested four minor refinements. Changes in this follow-up are limited to
+`docs/salesagent-grounding-offline.md`,
+`docs/salesagent-grounding-diagnostics-v1.md` and this plan:
+
+- Added S01's expected complete report, candidate/finding/error counts, exit 0
+  and explicit `agent_grounding: not_assessed` interpretation.
+- Documented Python 3.12+, installed Pydantic 2.13.4+, activation of the existing
+  environment, worktree cwd and why `PYTHONPATH=src` is required here. The tested
+  environment is Python 3.12.13 with Pydantic 2.13.4; no installation occurred.
+- Updated specification and current plan wording to reflect merged M1/M2 and
+  implemented M3 awaiting final review. Historical approval records remain
+  explicitly historical. No normative grammar, policy, report schema or frozen
+  corpus changed; CLI and test code are byte-identical to the previous handoff.
+
+Actual CLI subprocess probes used copied synthetic fixtures, blocked socket
+access, captured stdout/stderr and checked all input bytes after each invocation:
+
+| Scenario | Input | Exit | Observed output |
+| --- | --- | ---: | --- |
+| Supported | S01 | 0 | Complete report, one supported finding; empty stderr |
+| Contradicted | V01 | 0 | Complete report, one contradicted finding; empty stderr |
+| Indeterminate | A01 | 0 | Complete report, one indeterminate finding; empty stderr |
+| Malformed evidence | E05 | 1 | Error report with `invalid_authority_value`; empty stderr |
+| Invalid JSON | Temporary response file containing `{` | 2 | No stdout; safe response-input error on stderr |
+| Invalid envelope | Temporary response file containing `{}` | 2 | No stdout; safe response-envelope error on stderr |
+| Partial execution | Copy of S06 with first-turn output removed | 1 | Partial report retaining findings and error; empty stderr |
+
+All probes passed; fixture mutations were confined to new temporary copies.
+The exact documented environment-activation and S01 smoke blocks also passed,
+including every expected count and the unassessed agent-grounding field.
+
+Fresh offline checks for this documentation-only refinement:
+
+- Focused pack and CLI pytest: **241 passed in 0.51 seconds**, including frozen
+  corpus/review integrity, exact projections and CLI input immutability.
+- Repository Ruff lint passes; Ruff format accepts all five M3 files (the three
+  documentation files and unchanged CLI/test files).
+- Mypy for `src/ examples/salesagent_grounding.py` passes, 40 files.
+- Documentation UTF-8/newlines/whitespace/fences/relative-file links and
+  `git diff --check` pass.
+- Original Study branch/HEAD/status and all 154 protected file hashes match.
+  All tracked files except specification/plan remain byte-identical to merged
+  main; the frozen corpus, manifest, signed review and diagnostic code are intact.
+
+The full suite was not rerun for these documentation-only changes; the previous
+**1,709 passed** result remains the full-suite evidence. Repository-wide format
+and expanded src/examples mypy were likewise not rerun; their three formatting
+findings and nine Study CLI type errors remain previously verified baseline
+issues, not newly observed failures. No new failures occurred in fresh checks.
+
+All requested refinements and exit-code checks are complete. Final human review
+remains pending. No staging, commit, push, merge or additional milestone occurred.
+
+### Milestone 3 final acceptance and publication authorization
+
+The user reviewed the refinement handoff and stated: "thanks, now ready to commit,
+push and merge". This grants final Milestone 3 acceptance and authorizes a focused
+commit of its five files, branch push and merge into main. It does not authorize
+additional milestones, live evaluation, history rewrite or branch/worktree cleanup.
+Current specification and plan status wording now record that approval; earlier
+handoff entries remain historical.
+
+Fresh remote-main verification confirms the base remains
+`0c7a52da98b5e2661ebad02cd3eb42e6dcd9f220`; no integration conflict or new base
+change requires implementation work. CLI and test code are unchanged from the
+tested handoff. The recorded 1,709 full offline tests, 241 focused tests,
+process-level exit-code probes and scoped engineering checks remain applicable;
+only approval/status documentation changes for publication. Baseline format and
+expanded mypy failures remain documented above.

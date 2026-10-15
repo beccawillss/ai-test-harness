@@ -1,10 +1,13 @@
 # Sales Agent numeric waterproof diagnostics v1
 
-Status: Milestone 1 specification; architecture approved in principle. Corpus
-candidate-1 independent human review approved; corpus frozen with user approval. No
-detector, scorer, CLI, or live evaluation exists. The signed review is bound in
-the corpus manifest; Milestone 2 remains unauthorized.
+Status: Milestones 1 and 2 are reviewed, approved and merged into main. Corpus
+candidate-1 is independently reviewed and frozen; the signed review is bound in
+the corpus manifest. The diagnostic is implemented. Milestone 3's offline CLI,
+usage documentation and verification have final human acceptance, including the
+requested minor refinements. The user has authorized the Milestone 3 commit,
+push and merge into main. No scorer integration or live evaluation is introduced.
 See the [ExecPlan](plans/salesagent-waterproof-grounding-diagnostics.md),
+[offline usage guide](salesagent-grounding-offline.md),
 [ADR 0008](adr/0008-numeric-waterproof-diagnostics.md), and
 [corpus review guide](../tests/fixtures/salesagent_grounding/v1/README.md).
 
@@ -37,7 +40,7 @@ judge, target-internal import, network source fetch, or LLM extraction is allowe
 One `salesagent-waterproof-diagnostic-v1` contract covers projection, grammar,
 normalization, reference policy, errors, and report representation. Record exact
 safe configuration/content fingerprints and the implementing harness revision
-when implementation exists. Do not create independently dispatched subcontracts.
+when supplied. Do not create independently dispatched subcontracts.
 A change to observable interpretation or representation requires a diagnostic
 contract revision; documentation-only clarification does not.
 
@@ -51,9 +54,9 @@ Canonical hashing reuses `harness.core.fingerprints.canonical_json/fingerprint`:
 sorted keys, compact separators, UTF-8, preserved Unicode, finite JSON only.
 File checksums are SHA-256 of exact UTF-8 file bytes, including final newlines.
 
-## 3. Planned public interface and evidence projection
+## 3. Public interface and evidence projection
 
-Future pack-only entry point (not implemented in Milestone 1):
+Pack-only entry point implemented in Milestone 2:
 
 ```text
 diagnose_numeric_waterproof_claims(
@@ -165,7 +168,7 @@ not automatically a response-schema error or proof of falsehood.
 
 ## 6. Reviewed authority manifest
 
-The corpus's input manifests are exact examples of the planned JSON contract.
+The corpus's input manifests are exact examples of the JSON contract.
 They are evaluator-owned; they never enter the application under test.
 
 | Field | Contract |
@@ -209,7 +212,8 @@ reference conflicts; completeness is specifically necessary to assert absence.
 Synthetic fixtures set context.synthetic=true and review.kind=synthetic_simulation.
 Their simulated reviewed status exercises comparison policy; it is NOT evidence
 that a human reviewed the corpus. Real contexts must reject simulated reviews.
-The corpus manifest's independent_review remains null/pending until real review.
+The corpus manifest separately records the completed independent human review
+of candidate-1; simulated authority review fields do not attest that review.
 
 ## 7. Decision policy and evidence errors
 
@@ -259,7 +263,7 @@ the diagnostic does not invoke or alter the runner or any saved run.
 
 ## 8. Report and persistence boundary
 
-Future report includes contract version, safe configuration fingerprint, harness
+The report includes contract version, safe configuration fingerprint, harness
 revision when supplied, context bindings, normalized response/projection/authority
 fingerprints, execution status, candidates/findings, errors, and coverage counts.
 Retain original source text/hash and slot spans, resolved subject/provenance,
@@ -276,9 +280,10 @@ number, Score, PASS/FAIL, or certification field exists.
 
 Canonical report body excludes timestamps/random IDs. Identical validated inputs
 and configuration produce identical body hashes; no source mutation or cross-call
-state. Persist only by an explicitly invoked future consumer. Milestone 1 writes
-no report generator or persistence integration. The fixture oracle is the exact
-expected semantic projection of a future report, not an invented historical run.
+state. The Milestone 3 CLI emits the report to stdout; it does not write saved
+runs or integrate with result stores. Persistence requires an explicitly invoked
+consumer. The fixture oracle remains the independently authored expected semantic
+projection of the report, not an invented historical run.
 
 ## 9. Evaluation of the evaluator
 
@@ -287,7 +292,8 @@ six violations, six indeterminate, six non-claims) and eight isolated error
 fixtures. Text splits are 16 development and eight acceptance (four/two per
 group). All error fixtures are acceptance. Both splits and their labels are
 visible; this is not a blinded holdout. No deployed or Study v1 output is used.
-No performance result can be reported before a detector exists and is measured.
+Measured Milestone 2 conformance results are recorded in the ExecPlan; they do
+not establish broad language performance.
 
 Gold labels are authored expected behavior, not detector outputs. Independent
 review must approve exact text, spans, assertion form, subject method/ID,
@@ -338,7 +344,10 @@ simulate that justification; real-source operation remains a separate review.
 
 Milestone 1 authoring completion alone did not establish independent approval.
 The subsequent signed candidate-1 review is now recorded in the corpus manifest;
-the user has approved the corpus freeze and reviewed artifact commit. Milestones
-2/3, source implementation, further commits, publishing and live evaluation require
-separate authorization. See the ExecPlan
-for workspace protection, verification baseline, and review gates.
+the user approved the corpus freeze and Milestone 2 implementation, and both are
+merged into main. Milestone 3 implementation and the requested documentation
+refinements have final human acceptance, with its focused commit, push and merge
+authorized. Live evaluation and scope expansion still require separate
+authorization. See the ExecPlan for workspace protection, verification baseline
+and review gates. These status clarifications do not revise the diagnostic
+contract or frozen corpus.
