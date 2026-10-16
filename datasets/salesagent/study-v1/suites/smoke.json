@@ -1,0 +1,23 @@
+{
+  "schema_version": "suite-v1",
+  "id": "smoke",
+  "dataset": {
+    "id": "sales-agent-evaluation-study",
+    "version": "study-v1",
+    "descriptor": "../dataset.json"
+  },
+  "selection": {
+    "case_ids": [
+      "SA-REC-002",
+      "SA-CON-003",
+      "SA-INV-001",
+      "SA-PRC-004",
+      "SA-STA-004",
+      "SA-GRD-001",
+      "SA-RCV-004",
+      "SA-ADV-002"
+    ]
+  },
+  "attempts": 1,
+  "evaluation_profile": "salesagent-study-v1-capture"
+}

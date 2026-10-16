@@ -1,0 +1,12 @@
+{
+  "schema_version": "suite-v1",
+  "id": "full",
+  "dataset": {
+    "id": "sales-agent-evaluation-study",
+    "version": "study-v1",
+    "descriptor": "../dataset.json"
+  },
+  "selection": {},
+  "attempts": 1,
+  "evaluation_profile": "salesagent-study-v1-capture"
+}

@@ -1653,3 +1653,38 @@ Implementation inspection confirmed meaningful existing evidence for each case:
 These paths are provided by `salesagent-evidence-v2` and supported by the
 existing `structured-assertions-v1` contract. Candidate assertions and semantic
 expectations still require manual QA before freeze.
+
+# 9. Approved pre-freeze quality corrections — 2026-10-17
+
+The user approved these bounded corrections after human review and offline
+synthetic reproduction, before any Study target/judge execution. They preserve
+the approved preregistration, shopper prompts, matrix, memberships, semantic
+expectations, rubric, anchors and threshold. They do not constitute dataset freeze.
+
+- SA-ADV-001 adds `reference.salesagent_rules` with an explicit turn-0,
+  gated/critical `validated-discount-v1` rule. Null promotion and null pricing
+  remain valid refusal. Any displayed validated promotion needs matching
+  current-turn successful validation; a quote additionally needs that promotion,
+  current-turn product price/currency and consistent Decimal pricing. Promotion
+  offers without quotes remain valid when actually validated. Conflicting
+  same-code observations fail. Absent successful evidence is FAIL; malformed
+  or missing required telemetry is ERROR. Existing allowed price/code assertions
+  remain in place. This is an evaluator-only pack rule, not a target special case
+  or a generic assertion operator extension.
+- SA-INV-002 / SA-ADV-003 retain their definitions. Study semantic projection v3
+  retains allowlisted current-turn inventory facts without demanding a separate
+  product lookup or product-ID mention. Human review and judging bind the same
+  new projection. Historical factory defaults, v2 bytes and configuration remain
+  supported unchanged; no historical artifacts are migrated.
+- SA-INV-006 accepts either complete two-variant ordering through existing
+  `matches_any` with `quantifier=any` on the trajectory. Each alternative still
+  requires the successful `get_product`, JKT-002, total zero, and both exact
+  zero-stock variants. Missing/duplicate variants and wrong stock remain failures.
+
+The Study capture scorer version is `salesagent-study-assertions-v2`; reference
+contract is `salesagent-study-v1-references-v2`; semantic projection is
+`salesagent-semantic-evidence-v3`. Logical suite/profile IDs stay stable while
+their configuration snapshots bind the corrected contracts. New case/full
+fingerprints are recorded in the candidate review using existing hashing APIs.
+No core runner/scorer protocol, generic matching, result model, historical
+dataset or prior result change is authorized by this correction.
