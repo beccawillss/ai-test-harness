@@ -1,0 +1,9 @@
+{
+  "schema_version": "dataset-descriptor-v1",
+  "id": "sales-agent-evaluation-study",
+  "version": "study-v1",
+  "title": "Sales Agent Evaluation Study v1",
+  "description": "Fresh holdout-style candidate for human authoring QA; not frozen or executed.",
+  "cases": "cases.jsonl",
+  "fingerprint_scheme": "dataset-cases-v2"
+}

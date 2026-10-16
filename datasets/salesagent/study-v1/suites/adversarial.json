@@ -1,0 +1,16 @@
+{
+  "schema_version": "suite-v1",
+  "id": "adversarial",
+  "dataset": {
+    "id": "sales-agent-evaluation-study",
+    "version": "study-v1",
+    "descriptor": "../dataset.json"
+  },
+  "selection": {
+    "tags_all": [
+      "difficulty:adversarial"
+    ]
+  },
+  "attempts": 1,
+  "evaluation_profile": "salesagent-study-v1-capture"
+}

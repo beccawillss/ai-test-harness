@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import re
 from collections.abc import Callable
+from functools import partial
 from pathlib import Path
 from typing import Any, Literal
 
@@ -27,6 +28,7 @@ PROFILE = "salesagent-semantic-v1"
 EXPECTATIONS_VERSION = "salesagent-semantic-expectations-v1"
 RUBRIC_VERSION = "salesagent-shopper-quality-v1"
 PROJECTION_VERSION = "salesagent-semantic-evidence-v2"
+INVENTORY_PROJECTION_VERSION = "salesagent-semantic-evidence-v3"
 PROMPT_VERSION = "rubric-untrusted-json-v1"
 JUDGMENT_VERSION = "score-reason-v1"
 SCORER_NAME = "salesagent_semantic_quality"
@@ -192,7 +194,12 @@ def _mentioned(value: str, text: str) -> bool:
 
 
 def _facts(
-    trajectory: Any, shopper_text: str, product_ids: set[str], codes: set[str]
+    trajectory: Any,
+    shopper_text: str,
+    product_ids: set[str],
+    codes: set[str],
+    *,
+    retain_inventory: bool = False,
 ) -> dict[str, list[dict[str, Any]]]:
     if not isinstance(trajectory, list):
         raise TypeError("Missing turn trajectory")
@@ -237,14 +244,22 @@ def _facts(
     facts["inventory"] = [
         item
         for item in facts["inventory"]
-        if item["product_id"] in product_ids
+        if retain_inventory
+        or item["product_id"] in product_ids
         or _mentioned(item["product_id"], shopper_text)
     ]
     return facts
 
 
-def build_evidence(case: TestCase, response: TargetResponse) -> dict[str, Any]:
+def build_evidence(
+    case: TestCase,
+    response: TargetResponse,
+    *,
+    projection_version: str = PROJECTION_VERSION,
+) -> dict[str, Any]:
     """Project fair judgment inputs; business contradictions are not shape errors."""
+    if projection_version not in {PROJECTION_VERSION, INVENTORY_PROJECTION_VERSION}:
+        raise ValueError("Unsupported Sales Agent semantic projection version")
     expectations = semantic_expectations(case.reference)
     try:
         shoppers = validate_input(case.input)
@@ -290,6 +305,8 @@ def build_evidence(case: TestCase, response: TargetResponse) -> dict[str, Any]:
                         "\n".join(shoppers[: index + 1]).casefold(),
                         product_ids,
                         codes,
+                        retain_inventory=projection_version
+                        == INVENTORY_PROJECTION_VERSION,
                     ),
                 }
             )
@@ -314,8 +331,13 @@ def build_evidence(case: TestCase, response: TargetResponse) -> dict[str, Any]:
 
 
 def make_scorer(
-    judge_fn: Callable[[str], str | JudgeReply], judge_model: str
+    judge_fn: Callable[[str], str | JudgeReply],
+    judge_model: str,
+    *,
+    projection_version: str = PROJECTION_VERSION,
 ) -> RubricJudgeScorer:
+    if projection_version not in {PROJECTION_VERSION, INVENTORY_PROJECTION_VERSION}:
+        raise ValueError("Unsupported Sales Agent semantic projection version")
     return RubricJudgeScorer(
         judge_fn,
         judge_model,
@@ -323,8 +345,8 @@ def make_scorer(
         name=SCORER_NAME,
         pass_threshold=0.7,
         requires=frozenset({"structured"}),
-        evidence_builder=build_evidence,
-        projection_version=PROJECTION_VERSION,
+        evidence_builder=partial(build_evidence, projection_version=projection_version),
+        projection_version=projection_version,
         rubric_version=RUBRIC_VERSION,
         projection_reviewed=True,
         evidence_settings={

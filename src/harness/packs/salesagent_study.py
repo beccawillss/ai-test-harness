@@ -61,12 +61,9 @@ from harness.core.suites import (
 )
 from harness.judges.base import JudgeReply
 from harness.packs import salesagent_semantic as semantic
+from harness.packs.salesagent_rules import StudyAssertionsScorer, validate_rules
 from harness.scorers.output_contracts import ScoreOutputContract
 from harness.scorers.rubric_judge import RubricJudgeScorer
-from harness.scorers.structured_assertions import (
-    StructuredAssertionsScorer,
-    validate_assertions,
-)
 from harness.targets.salesagent import ADAPTER_VERSION, EVIDENCE_VERSION, validate_input
 
 METHODOLOGY_COMMIT = "5995e24d59d3e5795df0429a940f01a638974dd3"
@@ -74,7 +71,7 @@ METHODOLOGY_HASH = "5de0400bc3de7d910902d72b2d7199aab81d0b553e733faabfe0f4da91fa
 MATRIX_BYTES = "c0e15099ab3bccf54b7528a20d11fddbff71c5dccec89ab4ea9022a6ba9924b1"
 CAPTURE_PROFILE = "salesagent-study-v1-capture"
 SEMANTIC_PROFILE = "salesagent-study-v1-semantic"
-REFERENCE_CONTRACT = "salesagent-study-v1-references"
+REFERENCE_CONTRACT = "salesagent-study-v1-references-v2"
 CAPABILITIES = frozenset({"structured", "metadata", "trajectory"})
 ANCHORS = ScoreOutputContract(
     id="salesagent-semantic-anchors-v1", anchors=(0.0, 0.3, 0.6, 0.8, 1.0)
@@ -99,13 +96,12 @@ def _no_judge(_: str) -> str:
 
 
 def validate_reference(case: TestCase) -> None:
-    validate_input(case.input)
-    validate_assertions(case.reference)
+    validate_rules(case)
     semantic.semantic_expectations(case.reference)
 
 
-def capture_profile() -> tuple[StructuredAssertionsScorer, EvaluationProfile]:
-    scorer = StructuredAssertionsScorer(requires=CAPABILITIES)
+def capture_profile() -> tuple[StudyAssertionsScorer, EvaluationProfile]:
+    scorer = StudyAssertionsScorer(requires=CAPABILITIES)
     return scorer, EvaluationProfile(
         id=CAPTURE_PROFILE,
         taxonomy_evidence="excluded",
@@ -121,8 +117,9 @@ def capture_profile() -> tuple[StructuredAssertionsScorer, EvaluationProfile]:
 def semantic_profile(
     judge: JudgeConfiguration, judge_fn: Callable[[str], str | JudgeReply] = _no_judge
 ) -> tuple[RubricJudgeScorer, EvaluationProfile]:
-    # Reuse the existing versioned factory; change only the explicitly opt-in contract.
-    scorer = semantic.make_scorer(judge_fn, judge.model)
+    scorer = semantic.make_scorer(
+        judge_fn, judge.model, projection_version=semantic.INVENTORY_PROJECTION_VERSION
+    )
     scorer.output_validation = ANCHORS
     return scorer, EvaluationProfile(
         id=SEMANTIC_PROFILE,
@@ -138,14 +135,18 @@ def semantic_profile(
 
 
 def rating_contract() -> RatingContract:
-    scorer = semantic.make_scorer(_no_judge, "preparation-only")
+    scorer = semantic.make_scorer(
+        _no_judge,
+        "preparation-only",
+        projection_version=semantic.INVENTORY_PROJECTION_VERSION,
+    )
     return RatingContract(
         rubric=semantic.RUBRIC,
         rubric_version=semantic.RUBRIC_VERSION,
         scale="anchors",
         anchors=ANCHORS.anchors,
         threshold=0.7,
-        projection_version=semantic.PROJECTION_VERSION,
+        projection_version=semantic.INVENTORY_PROJECTION_VERSION,
         prompt_version=semantic.PROMPT_VERSION,
         judgment_version=semantic.JUDGMENT_VERSION,
         evidence_settings_json=canonical_json(scorer.evidence_settings),

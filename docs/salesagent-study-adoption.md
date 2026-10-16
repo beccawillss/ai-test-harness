@@ -1,10 +1,10 @@
 # Sales Agent Evaluation Study v1 integration
 
-The study is **approved in methodology, not authored or run**. Readiness
-Milestones 1–2 implement the generic prospective workflow and the Study v1
-integration boundary. They do not supply the 50 actual case definitions, a
-live deployment freeze, human ratings or study findings. Authoring and live
-execution require separate approval.
+The study has **50 authored candidates under human QA; it is not frozen or run**.
+Readiness Milestones 1–2 implement the prospective workflow and integration
+boundary. The subsequent candidate authoring and approved 2026-10-17 quality
+corrections are recorded in the [candidate review](studies/sales-agent-evaluation-study-v1-authoring-review.md).
+No live deployment freeze, human ratings or study findings are supplied.
 
 The [approved preregistration](studies/sales-agent-evaluation-study-v1-preregistration.md)
 is pinned to commit `5995e24d59d3e5795df0429a940f01a638974dd3`, SHA-256
@@ -14,7 +14,7 @@ contains only approved classifications, totals and selectors. Its bytes are
 pinned by the integration and checked against a separate reading of that
 preregistration in tests. It contains no shopper input or evaluator reference.
 
-## Future authored files
+## Candidate files
 
 ```text
 datasets/salesagent/study-v1/
@@ -91,20 +91,37 @@ order; original expressions and ordered membership are frozen together.
 
 ## Profiles and isolation
 
-`capture_profile()` returns only `StructuredAssertionsScorer`, requiring
+`capture_profile()` returns only `StudyAssertionsScorer`, requiring
 structured, metadata and trajectory evidence, plus profile
 `salesagent-study-v1-capture`. This uniform scorer evaluates every capture
-attempt. It makes zero semantic calls. The study explicitly opts into full
+attempt. It composes unchanged generic assertions with explicit
+`reference.salesagent_rules` opt-ins and records schema
+`salesagent-study-assertions-v2`, reference contract
+`salesagent-study-v1-references-v2`. Only SA-ADV-001 currently opts into
+`validated-discount-v1`: null promotion/pricing permits refusal; a promotion
+requires consistent current-turn validation; a quote additionally requires
+matching promotion, current product facts and Decimal discount-first pricing.
+Rules are selected by reference configuration, never case ID/risk/taxonomy.
+The generic scorer and operators are unchanged. It makes zero semantic calls.
+The study explicitly opts into full
 case payload snapshots and rejects hashes-only overrides; generic defaults
 remain unchanged. Case and dataset metadata allowlists remain empty.
 
 `semantic_profile(judge_configuration, judge_fn)` returns the existing Sales
 Agent rubric scorer with profile `salesagent-study-v1-semantic`. It preserves
-the historical scorer name, rubric/version, whole-conversation evidence
-projection, prompt format and threshold 0.7. It adds only the explicit
+the historical scorer name, rubric/version, prompt format and threshold 0.7.
+It explicitly selects `salesagent-semantic-evidence-v3`, which retains typed,
+allowlisted successful inventory observations within their original turn even
+without product lookup/cards or a literal product ID in shopper text. These
+observations provide context for assessing that turn, not a guessed name-to-ID
+mapping. Product/promotion projection and error handling remain unchanged.
+The human rating contract selects the same v3 evidence. It also selects the
 `salesagent-semantic-anchors-v1` output contract: 0.0, 0.3, 0.6, 0.8, 1.0.
 Other scores, including 0.7, are evaluator ERROR under this new profile. The
-historical `salesagent-semantic-v1` factory still accepts continuous scores.
+historical `salesagent-semantic-v1` factory still defaults to v2 evidence and
+accepts continuous scores; its prepared bytes and configuration are preserved.
+Existing Study execution contracts with older profiles must be reviewed and
+re-frozen before execution, never silently interpreted as the corrected config.
 
 Both study profiles declare taxonomy excluded. Tests prove changing title,
 description, category, risk, tags and extra leaves semantic prepared bytes
@@ -219,7 +236,8 @@ outside primary summaries.
 ## Commands
 
 The thin [recipe](../examples/salesagent_study.py) has no import-time clients.
-Run from the repository environment. No real study files are supplied yet.
+Run from the repository environment. Candidate files require completed human QA
+and freeze before execution.
 `--help` describes required arguments. Commands requiring a study take
 `--descriptor PATH --suites PATH1 PATH2 PATH3 PATH4 PATH5 PATH6`.
 
@@ -258,8 +276,8 @@ needed. New readers require the prospective schemas plus study validation,
 target-freeze, execution, preparation and analysis `v1` schemas. Older readers
 must not resave these artifacts while dropping context.
 
-Before a live study, remaining work is to authorize and author/review the 50
-fresh case inputs and expectations, freeze their actual descriptor/suites, resolve
+Before a live study, remaining work is to finish reviewing the 50
+candidate inputs and expectations, freeze their actual descriptor/suites, resolve
 real deployment facts, supply and review actual judge configuration, and approve
 live execution and budgets. The coverage matrix is already approved; it must not
 be redesigned to fit observed outcomes. No case authoring or live run is part of
