@@ -477,13 +477,13 @@ def test_historical_v2_prepared_bytes_and_configuration_are_unchanged():
 def test_study_versions_bind_capture_semantic_and_human_contracts(cases):
     c = contract(definition())
     capture_scorer, profile = study.capture_profile()
-    assert capture_scorer.schema_version == "salesagent-study-assertions-v2"
-    assert profile.reference_contract == "salesagent-study-v1-references-v2"
+    assert capture_scorer.schema_version == "salesagent-study-assertions-v3"
+    assert profile.reference_contract == "salesagent-study-v1-references-v3"
     scorer, _ = study.semantic_profile(settings())
     assert (
         scorer.projection_version
         == c.rating.projection_version
-        == "salesagent-semantic-evidence-v3"
+        == "salesagent-semantic-evidence-v4"
     )
     assert scorer.rubric == semantic.RUBRIC
     assert scorer.pass_threshold == c.rating.threshold == 0.7
@@ -498,13 +498,13 @@ def test_study_versions_bind_capture_semantic_and_human_contracts(cases):
         (
             "capture_profile_json",
             c.capture_profile_json.replace(
-                "salesagent-study-assertions-v2", "structured-assertions-v1"
+                "salesagent-study-assertions-v3", "salesagent-study-assertions-v2"
             ),
         ),
         (
             "semantic_profile_json",
             c.semantic_profile_json.replace(
-                "salesagent-semantic-evidence-v3", "salesagent-semantic-evidence-v2"
+                "salesagent-semantic-evidence-v4", "salesagent-semantic-evidence-v3"
             ),
         ),
     ]:

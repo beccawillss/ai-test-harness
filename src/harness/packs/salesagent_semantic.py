@@ -29,6 +29,7 @@ EXPECTATIONS_VERSION = "salesagent-semantic-expectations-v1"
 RUBRIC_VERSION = "salesagent-shopper-quality-v1"
 PROJECTION_VERSION = "salesagent-semantic-evidence-v2"
 INVENTORY_PROJECTION_VERSION = "salesagent-semantic-evidence-v3"
+PRODUCT_PROJECTION_VERSION = "salesagent-semantic-evidence-v4"
 PROMPT_VERSION = "rubric-untrusted-json-v1"
 JUDGMENT_VERSION = "score-reason-v1"
 SCORER_NAME = "salesagent_semantic_quality"
@@ -200,6 +201,7 @@ def _facts(
     codes: set[str],
     *,
     retain_inventory: bool = False,
+    retain_products: bool = False,
 ) -> dict[str, list[dict[str, Any]]]:
     if not isinstance(trajectory, list):
         raise TypeError("Missing turn trajectory")
@@ -225,7 +227,8 @@ def _facts(
             for raw in products:
                 product = _Product.model_validate(raw)
                 if (
-                    product.product_id in product_ids
+                    retain_products
+                    or product.product_id in product_ids
                     or _mentioned(product.product_id, shopper_text)
                     or _mentioned(product.name, shopper_text)
                 ):
@@ -258,7 +261,11 @@ def build_evidence(
     projection_version: str = PROJECTION_VERSION,
 ) -> dict[str, Any]:
     """Project fair judgment inputs; business contradictions are not shape errors."""
-    if projection_version not in {PROJECTION_VERSION, INVENTORY_PROJECTION_VERSION}:
+    if projection_version not in {
+        PROJECTION_VERSION,
+        INVENTORY_PROJECTION_VERSION,
+        PRODUCT_PROJECTION_VERSION,
+    }:
         raise ValueError("Unsupported Sales Agent semantic projection version")
     expectations = semantic_expectations(case.reference)
     try:
@@ -306,7 +313,9 @@ def build_evidence(
                         product_ids,
                         codes,
                         retain_inventory=projection_version
-                        == INVENTORY_PROJECTION_VERSION,
+                        in {INVENTORY_PROJECTION_VERSION, PRODUCT_PROJECTION_VERSION},
+                        retain_products=projection_version
+                        == PRODUCT_PROJECTION_VERSION,
                     ),
                 }
             )
@@ -336,7 +345,11 @@ def make_scorer(
     *,
     projection_version: str = PROJECTION_VERSION,
 ) -> RubricJudgeScorer:
-    if projection_version not in {PROJECTION_VERSION, INVENTORY_PROJECTION_VERSION}:
+    if projection_version not in {
+        PROJECTION_VERSION,
+        INVENTORY_PROJECTION_VERSION,
+        PRODUCT_PROJECTION_VERSION,
+    }:
         raise ValueError("Unsupported Sales Agent semantic projection version")
     return RubricJudgeScorer(
         judge_fn,

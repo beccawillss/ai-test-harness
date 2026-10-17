@@ -61,7 +61,7 @@ from harness.core.suites import (
 )
 from harness.judges.base import JudgeReply
 from harness.packs import salesagent_semantic as semantic
-from harness.packs.salesagent_rules import StudyAssertionsScorer, validate_rules
+from harness.packs.salesagent_rules import StudyLabelAssertionsScorer, validate_rules
 from harness.scorers.output_contracts import ScoreOutputContract
 from harness.scorers.rubric_judge import RubricJudgeScorer
 from harness.targets.salesagent import ADAPTER_VERSION, EVIDENCE_VERSION, validate_input
@@ -71,7 +71,7 @@ METHODOLOGY_HASH = "5de0400bc3de7d910902d72b2d7199aab81d0b553e733faabfe0f4da91fa
 MATRIX_BYTES = "c0e15099ab3bccf54b7528a20d11fddbff71c5dccec89ab4ea9022a6ba9924b1"
 CAPTURE_PROFILE = "salesagent-study-v1-capture"
 SEMANTIC_PROFILE = "salesagent-study-v1-semantic"
-REFERENCE_CONTRACT = "salesagent-study-v1-references-v2"
+REFERENCE_CONTRACT = "salesagent-study-v1-references-v3"
 CAPABILITIES = frozenset({"structured", "metadata", "trajectory"})
 ANCHORS = ScoreOutputContract(
     id="salesagent-semantic-anchors-v1", anchors=(0.0, 0.3, 0.6, 0.8, 1.0)
@@ -100,8 +100,8 @@ def validate_reference(case: TestCase) -> None:
     semantic.semantic_expectations(case.reference)
 
 
-def capture_profile() -> tuple[StudyAssertionsScorer, EvaluationProfile]:
-    scorer = StudyAssertionsScorer(requires=CAPABILITIES)
+def capture_profile() -> tuple[StudyLabelAssertionsScorer, EvaluationProfile]:
+    scorer = StudyLabelAssertionsScorer(requires=CAPABILITIES)
     return scorer, EvaluationProfile(
         id=CAPTURE_PROFILE,
         taxonomy_evidence="excluded",
@@ -118,7 +118,7 @@ def semantic_profile(
     judge: JudgeConfiguration, judge_fn: Callable[[str], str | JudgeReply] = _no_judge
 ) -> tuple[RubricJudgeScorer, EvaluationProfile]:
     scorer = semantic.make_scorer(
-        judge_fn, judge.model, projection_version=semantic.INVENTORY_PROJECTION_VERSION
+        judge_fn, judge.model, projection_version=semantic.PRODUCT_PROJECTION_VERSION
     )
     scorer.output_validation = ANCHORS
     return scorer, EvaluationProfile(
@@ -138,7 +138,7 @@ def rating_contract() -> RatingContract:
     scorer = semantic.make_scorer(
         _no_judge,
         "preparation-only",
-        projection_version=semantic.INVENTORY_PROJECTION_VERSION,
+        projection_version=semantic.PRODUCT_PROJECTION_VERSION,
     )
     return RatingContract(
         rubric=semantic.RUBRIC,
@@ -146,7 +146,7 @@ def rating_contract() -> RatingContract:
         scale="anchors",
         anchors=ANCHORS.anchors,
         threshold=0.7,
-        projection_version=semantic.INVENTORY_PROJECTION_VERSION,
+        projection_version=semantic.PRODUCT_PROJECTION_VERSION,
         prompt_version=semantic.PROMPT_VERSION,
         judgment_version=semantic.JUDGMENT_VERSION,
         evidence_settings_json=canonical_json(scorer.evidence_settings),
