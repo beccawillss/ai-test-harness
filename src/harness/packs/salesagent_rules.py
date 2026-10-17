@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from copy import deepcopy
 from decimal import ROUND_HALF_UP, Decimal
 from typing import Any, Literal
 
@@ -154,3 +155,129 @@ class StudyAssertionsScorer(StructuredAssertionsScorer):
                 "extra": {**base.extra, "assertions": outcomes},
             }
         )
+
+
+def _turn_prefix(path: tuple[str | int, ...]) -> tuple[str | int, ...]:
+    if (
+        len(path) >= 3
+        and path[:2] == ("structured", "turns")
+        and (type(path[2]) is int or path[2] == "*")
+    ):
+        return path[:3]
+    return ()
+
+
+def _tool_path(path: tuple[str | int, ...]) -> tuple[str | int, ...] | None:
+    """Recognize normalized tool entries, never arbitrary nested `name` keys."""
+    if _turn_prefix(path):
+        path = path[3:]
+    if (
+        len(path) >= 2
+        and path[0] == "trajectory"
+        and (type(path[1]) is int or path[1] == "*")
+    ):
+        return path[:2]
+    return None
+
+
+def _comparison_value(
+    value: Any,
+    path: tuple[str | int, ...],
+    tool_names: dict[tuple[str | int, ...], str],
+    tool_name: str | None = None,
+    *,
+    member: bool = False,
+) -> Any:
+    """Copy only approved labels into a comparison view; no coercion or aliases."""
+    entry = _tool_path(path)
+    prefix = _turn_prefix(path)
+    if entry is not None:
+        if tool_name is None:
+            tool_name = tool_names.get(prefix + entry)
+        if path == prefix + entry and isinstance(value, dict):
+            tool_name = value.get("name", tool_name)
+    if isinstance(value, dict):
+        return {
+            key: _comparison_value(item, (*path, key), tool_names, tool_name)
+            for key, item in value.items()
+        }
+    if isinstance(value, list):
+        return [
+            _comparison_value(item, (*path, i), tool_names, tool_name, member=True)
+            for i, item in enumerate(value)
+        ]
+    if not isinstance(value, str):
+        return value
+    tail = path[3:] if prefix else path
+    constraint = tail[:2] == ("evidence", "resolved_constraints") and bool(prefix)
+    label = constraint and (
+        (len(tail) == 3 and tail[2] in {"colour", "size"})
+        or (len(tail) == 4 and tail[2] == "features" and member)
+    )
+    if entry is not None:
+        field = tail[2:]
+        label |= tool_name == "search_products" and field == ("arguments", "category")
+        label |= (
+            tool_name == "check_inventory"
+            and len(field) == 2
+            and field[0] == "result"
+            and field[1] in {"colour", "size"}
+        )
+    return value.casefold() if label else value
+
+
+class StudyLabelAssertionsScorer(StudyAssertionsScorer):
+    """V3 label comparisons; the v2 scorer above remains explicitly available."""
+
+    schema_version = "salesagent-study-assertions-v3"
+
+    def score(self, case: TestCase, response: TargetResponse) -> Score:
+        assertions = validate_assertions(case.reference)
+        raw = response.model_dump(mode="json")
+        tool_names: dict[tuple[str | int, ...], str] = {}
+        for j, call in enumerate(response.trajectory or []):
+            tool_names[("trajectory", j)] = call.name
+        # Concrete indexed assertion paths can inherit the observed tool type.
+        turns = response.structured.get("turns", [])
+        if isinstance(turns, list):
+            for i, turn in enumerate(turns):
+                calls = turn.get("trajectory", []) if isinstance(turn, dict) else []
+                if isinstance(calls, list):
+                    for j, call in enumerate(calls):
+                        if isinstance(call, dict) and isinstance(call.get("name"), str):
+                            tool_names[("structured", "turns", i, "trajectory", j)] = (
+                                call["name"]
+                            )
+        comparison = case.model_copy(deep=True)
+        assert isinstance(comparison.reference, dict)  # validated above
+        for assertion, item in zip(assertions, comparison.reference["assertions"]):
+            if "expected" not in item:
+                continue  # expected_path resolves against the same comparison view.
+            path = tuple(assertion.path)
+            if assertion.op in {"contains", "excludes"}:
+                path += ("*",)  # The expected value describes a collection member.
+            member = type(path[-1]) is int or path[-1] == "*"
+            if assertion.op == "matches_any":
+                item["expected"] = [
+                    _comparison_value(v, path, tool_names, member=member)
+                    for v in assertion.expected
+                ]
+            else:
+                item["expected"] = _comparison_value(
+                    assertion.expected, path, tool_names, member=member
+                )
+        view = deepcopy(response)
+        view.structured = _comparison_value(
+            raw["structured"], ("structured",), tool_names
+        )
+        # Top-level trajectory is another normalized view, never persisted mutated.
+        if response.trajectory is not None:
+            view.trajectory = [
+                type(call).model_validate(
+                    _comparison_value(record, ("trajectory", i), tool_names)
+                )
+                for i, (call, record) in enumerate(
+                    zip(response.trajectory, raw["trajectory"])
+                )
+            ]
+        return super().score(comparison, view)

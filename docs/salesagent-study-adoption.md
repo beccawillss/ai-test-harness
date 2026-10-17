@@ -91,13 +91,21 @@ order; original expressions and ordered membership are frozen together.
 
 ## Profiles and isolation
 
-`capture_profile()` returns only `StudyAssertionsScorer`, requiring
+`capture_profile()` returns only `StudyLabelAssertionsScorer`, requiring
 structured, metadata and trajectory evidence, plus profile
 `salesagent-study-v1-capture`. This uniform scorer evaluates every capture
 attempt. It composes unchanged generic assertions with explicit
 `reference.salesagent_rules` opt-ins and records schema
-`salesagent-study-assertions-v2`, reference contract
-`salesagent-study-v1-references-v2`. Only SA-ADV-001 currently opts into
+`salesagent-study-assertions-v3`, reference contract
+`salesagent-study-v1-references-v3`. It casefolds temporary comparison copies
+only for per-turn resolved-constraint features/colour/size, search-products
+argument category, and check-inventory result colour/size. Named tool patterns
+and concrete indexed tool paths supply tool type; arbitrary matching dictionary
+keys do not activate the policy. Values are not trimmed or mapped to aliases.
+The original case/response remains intact. Product IDs, numerical values,
+status enums, feature order and other fields retain their existing semantics.
+The original `StudyAssertionsScorer` v2 remains available explicitly with its
+unchanged scorer snapshot and outcomes. Only SA-ADV-001 currently opts into
 `validated-discount-v1`: null promotion/pricing permits refusal; a promotion
 requires consistent current-turn validation; a quote additionally requires
 matching promotion, current product facts and Decimal discount-first pricing.
@@ -110,16 +118,20 @@ remain unchanged. Case and dataset metadata allowlists remain empty.
 `semantic_profile(judge_configuration, judge_fn)` returns the existing Sales
 Agent rubric scorer with profile `salesagent-study-v1-semantic`. It preserves
 the historical scorer name, rubric/version, prompt format and threshold 0.7.
-It explicitly selects `salesagent-semantic-evidence-v3`, which retains typed,
-allowlisted successful inventory observations within their original turn even
-without product lookup/cards or a literal product ID in shopper text. These
-observations provide context for assessing that turn, not a guessed name-to-ID
-mapping. Product/promotion projection and error handling remain unchanged.
-The human rating contract selects the same v3 evidence. It also selects the
+It explicitly selects `salesagent-semantic-evidence-v4`, which retains every
+allowlisted successful get-product/search-products observation in its original
+turn, including duplicate/conflicting records in source order, without requiring
+cards or textual mentions. It also retains the v3 inventory behavior. These
+are observed facts, not a guessed name-to-ID mapping or imported catalogue.
+Promotion selection and error handling are unchanged. The existing 64 KiB UTF-8
+evidence limit rejects oversized payloads as ERROR before judging; no facts are
+silently truncated. No warmth/season fields are added.
+The human rating contract selects the same v4 evidence. It also selects the
 `salesagent-semantic-anchors-v1` output contract: 0.0, 0.3, 0.6, 0.8, 1.0.
 Other scores, including 0.7, are evaluator ERROR under this new profile. The
 historical `salesagent-semantic-v1` factory still defaults to v2 evidence and
 accepts continuous scores; its prepared bytes and configuration are preserved.
+Explicit v3 remains supported with unchanged prepared bytes and configuration.
 Existing Study execution contracts with older profiles must be reviewed and
 re-frozen before execution, never silently interpreted as the corrected config.
 

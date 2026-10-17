@@ -52,6 +52,62 @@ passed; Ruff, changed-file formatting, mypy (39 source files) and diff checks
 passed. Historical v2 prepared bytes/configurations and 41 protected file hashes
 were preserved. There were no pre-existing engineering-check failures.
 
+## Second approved correction slice — label comparisons and product evidence
+
+Implemented after human approval of the two-part plan, using offline synthetic
+responses only. Full human QA and formal candidate approval are still pending.
+The earlier correction record above remains a record of its own versions.
+
+- Current capture uses `StudyLabelAssertionsScorer`, schema
+  `salesagent-study-assertions-v3`, reference contract
+  `salesagent-study-v1-references-v3`. Casefolding is limited to temporary
+  comparison copies of resolved-constraint features/colour/size, search-products
+  argument category, and check-inventory result colour/size. Product IDs,
+  numbers, status enums, prose, list ordering and all other fields stay exact
+  under their existing operators. No alias inference or whitespace broadening
+  is introduced. Historical `StudyAssertionsScorer` v2 remains available.
+- Semantic/human projection is now `salesagent-semantic-evidence-v4`, retaining
+  all allowlisted successful current-turn product observations without requiring
+  a card or a shopper/assistant mention. Observation order and conflicting records
+  survive; later facts never backfill earlier turns. Inventory v3 retention,
+  promotion filtering and the 64 KiB evidence limit remain in force. The old
+  semantic v2/v3 projections retain their original prepared/configuration bytes.
+- Direct comparison exposure is 23 cases: REC-001/002/003/008; CON-001–007;
+  INV-001–005; STA-001/002/003/006; RCV-003/004; ADV-003. The uniform v4 profile
+  applies to all 50; prose-only alternatives particularly affect CON-002/005
+  and RCV-003/004. No behavior dispatches on these IDs.
+- All 50 case definitions, descriptor and suites are byte-identical to the
+  approved input to this slice. The full ordered case fingerprint remains
+  `bde063c5b1fcb845e3b18d6c489f26b72c549a700423b69122d37d8fd29d4bf9`.
+  Dataset/suite fingerprints do not encode these evaluator changes; new scorer,
+  reference, projection, profile and rating bindings identify the new evaluation.
+  Stale execution snapshots are rejected, never silently upgraded.
+
+The [living correction plan](../plans/salesagent-study-v1-quality-corrections.md)
+records verification and compatibility evidence. Tests include complete positive
+and negative responses for all 23 cases, exclusion controls, multiple product
+observations, conflicts, turn isolation, payload boundaries and the protected
+human-review roster. Synthetic judgments establish workflow behavior only;
+no live semantic accuracy or target reliability is claimed. Warmth/season and
+the remaining P2 findings are outside this correction. The implementation-stage
+handoff left changes uncommitted and candidates unfrozen; subsequent commit/PR
+authorization is recorded below.
+
+Final second-slice verification: **122 new regression cases**, **613 focused
+tests**, and **1,726 full offline tests** passed. Ruff, formatting of changed
+Python files, mypy (39 source files), diff/new-file checks and all 86 protected
+file hashes passed. Historical prepared/configuration hashes remain unchanged.
+The correction plan records before/after evaluator fingerprints and the exact
+verification scope. These checks do not constitute human candidate approval.
+
+The user subsequently approved the implementation for commit and PR preparation.
+The dedicated P1 branch is based on latest main after PR #15, with the original
+working tree preserved. The correction plan records verification after transfer.
+That verification passed 613 focused tests and 1,967 full offline tests, plus
+Ruff, formatting, mypy (40 source files), whitespace and protected-file checks.
+The larger full-suite count includes the 241 grounding tests already on main.
+Formal candidate human QA, approval and freeze remain pending.
+
 ## Fixture audit
 
 Authoritative source: clean local `ecommerce-sales-agent` checkout at `3320e556540d3f95bee1e8509f13e558ce266b6c`. Its AGENTS.md identifies `data/products.json` and `data/discounts.json` as authoritative; `src/salesagent/main.py` wires those exact files into the repositories. Product/promotion repositories, commerce inventory/discount service, recommendation availability calculation and Decimal pricing service were inspected read-only. No target application code was imported or invoked for authoring.
