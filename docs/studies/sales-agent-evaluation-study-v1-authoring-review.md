@@ -277,6 +277,78 @@ work before freeze; it is not silently resolved by the accepted season deferral.
   review and freeze human ratings before revealing their judge results; keep the
   primary, diagnostic and target-variance budgets distinct.
 
+## Approved warmth evidence extension — implementation approved for PR
+
+The user approved the previously proposed opt-in adapter 3 / evidence v3 /
+semantic v5 extension. It is implemented in an isolated worktree from main
+`da85619` (P2 PR #17 merged). The earlier read-only warmth assessment remains a
+historical record; the approval/implementation status in this section supersedes
+its proposal-only status. Formal human QA of all 50 cases and freeze remain pending.
+
+Authoritative target inspection reconfirmed `Product.warmth` as
+`none | light | medium | high | shell`, copied into the public `ProductData`
+string by lookup/search tools. The reviewed catalogue hash remains
+`70960848556e1e63c1bd3337203ab057a9fae1e7f6d343fb383f85a838c541ab`.
+Cairn is `high`; Apex/Ridgeway/StormPro are `shell`; Velo/Trail Breeze are `light`.
+These categories are never converted to a temperature or numerical ranking.
+The target application and its fixtures were inspected read-only and not changed.
+
+The extension supplies the missing authoritative property for REC-004/008,
+GRD-002 and RCV-005 without changing their approved expectations. Version-specific
+product/search models retain warmth in the normalized per-turn and aggregate
+trajectories. V5 projects it on each original product record, with duplicates,
+conflicting observations and source order retained; later turns never backfill
+earlier evidence. Product-season retention remains out of scope.
+
+Missing/null/unknown/wrongly typed warmth on a successful product observation is
+ERROR; empty searches and failed business tools need no invented warmth. V5
+requires matching adapter 3/evidence v3 metadata and preserves the 64 KiB UTF-8
+limit. No recommendation-card value, current catalogue lookup, name or weather
+label can repair missing authoritative source warmth.
+
+Adapter 2 and semantic v2/v3/v4 keep their historical defaults and prepared bytes.
+A new Study execution must explicitly choose the v3/v3/v5 binding. The existing
+recorded rating projection selects profile reconstruction throughout validation,
+primary/diagnostic preparation, verification, human export and judge construction.
+Unknown or mixed configurations are rejected before live factories. Both humans
+and judges receive the same prepared evidence and rating projection. Existing
+v1 JSON schemas, scorer/reference v3, rubric, anchors and threshold remain intact.
+
+All 50 candidate definitions, descriptor, suite files/memberships, methodology,
+authoring specification, matrix, historic datasets/results and the reserved
+human roster are unchanged. The full candidate fingerprint remains
+`4db62cceec19881853a2d921e886edd4866cfef976b5c209bd06da486ec5e257`.
+Before/after configuration fingerprints and verification are recorded in the
+[living plan](../plans/salesagent-study-v1-quality-corrections.md). Final verification
+passed **997 focused tests** and **2,240 full offline tests**, including 120 new
+warmth regression cases and the added v5 recipe pipeline. Ruff, mypy (40 source
+files), formatting of all seven changed Python files, whitespace checks and
+protected-file audits pass. Repository-wide formatting retains exactly the
+three previously documented unchanged failures. Historical v2/v3/v4 prepared
+and configuration hashes, default profiles/rating and the archived synthetic
+execution digest all remain unchanged.
+
+The user subsequently reviewed the implementation and authorized commit/push
+and PR preparation against main. Final Git verification confirms an exact base
+at freshly fetched main `da85619c6b743bc73ab4ef425d49a1482934c1ed`, the approved
+14-file scope and 142 other tracked files unchanged. The entire offline suite
+passed again: **2,240 tests in 100.47 seconds**. The prior focused/compatibility
+receipts remain applicable; Ruff, mypy and changed-file formatting pass, and
+repository-wide formatting retains only the same three unchanged inherited files.
+No implementation reconciliation or new evidence contract change was necessary.
+This authorization does not complete formal candidate QA, freeze Study v1 or
+permit live execution or PR merge.
+
+The four warmth-specific expectations now have the required evidence path;
+formal human QA must still review their meaning and the new contract. This
+extension does not attest deployed fixture identity or live judge accuracy.
+Numeric thermal claims remain unsupported, season coverage remains deferred,
+and responses without product observations provide no new product warmth facts.
+All earlier accepted tool/card and STA-003 limitations remain in effect.
+Final approval requires recorded QA of all 50 candidates, verified deployment and
+judge settings, final configuration fingerprints, and separately authorized freeze.
+No live target/judge execution, commit, push, merge or Study freeze occurred.
+
 ## Fixture audit
 
 Authoritative source: clean local `ecommerce-sales-agent` checkout at `3320e556540d3f95bee1e8509f13e558ce266b6c`. Its AGENTS.md identifies `data/products.json` and `data/discounts.json` as authoritative; `src/salesagent/main.py` wires those exact files into the repositories. Product/promotion repositories, commerce inventory/discount service, recommendation availability calculation and Decimal pricing service were inspected read-only. No target application code was imported or invoked for authoring.

@@ -20,9 +20,14 @@ from harness.targets._salesagent_contract import (
     Constraints,
     Money,
     Percentage,
+    Warmth,
     WaterproofRating,
 )
-from harness.targets.salesagent import validate_input
+from harness.targets.salesagent import (
+    WARMTH_ADAPTER_VERSION,
+    WARMTH_EVIDENCE_VERSION,
+    validate_input,
+)
 
 PROFILE = "salesagent-semantic-v1"
 EXPECTATIONS_VERSION = "salesagent-semantic-expectations-v1"
@@ -30,6 +35,7 @@ RUBRIC_VERSION = "salesagent-shopper-quality-v1"
 PROJECTION_VERSION = "salesagent-semantic-evidence-v2"
 INVENTORY_PROJECTION_VERSION = "salesagent-semantic-evidence-v3"
 PRODUCT_PROJECTION_VERSION = "salesagent-semantic-evidence-v4"
+WARMTH_PROJECTION_VERSION = "salesagent-semantic-evidence-v5"
 PROMPT_VERSION = "rubric-untrusted-json-v1"
 JUDGMENT_VERSION = "score-reason-v1"
 SCORER_NAME = "salesagent_semantic_quality"
@@ -135,6 +141,12 @@ class _Product(_Record):
     total_stock: int = Field(ge=0)
 
 
+class _WarmthProduct(_Product):
+    """V5 adds one categorical fact; older projections/rules keep _Product."""
+
+    warmth: Warmth
+
+
 class _Inventory(_Record):
     product_id: str
     colour: str
@@ -202,6 +214,7 @@ def _facts(
     *,
     retain_inventory: bool = False,
     retain_products: bool = False,
+    retain_warmth: bool = False,
 ) -> dict[str, list[dict[str, Any]]]:
     if not isinstance(trajectory, list):
         raise TypeError("Missing turn trajectory")
@@ -225,7 +238,8 @@ def _facts(
             if not isinstance(products, list):
                 raise ValueError("Malformed product facts")
             for raw in products:
-                product = _Product.model_validate(raw)
+                model = _WarmthProduct if retain_warmth else _Product
+                product = model.model_validate(raw)
                 if (
                     retain_products
                     or product.product_id in product_ids
@@ -265,10 +279,18 @@ def build_evidence(
         PROJECTION_VERSION,
         INVENTORY_PROJECTION_VERSION,
         PRODUCT_PROJECTION_VERSION,
+        WARMTH_PROJECTION_VERSION,
     }:
         raise ValueError("Unsupported Sales Agent semantic projection version")
     expectations = semantic_expectations(case.reference)
     try:
+        if projection_version == WARMTH_PROJECTION_VERSION and (
+            not isinstance(response.metadata, dict)
+            or response.metadata.get("evidence_schema_version")
+            != WARMTH_EVIDENCE_VERSION
+            or response.metadata.get("adapter_version") != WARMTH_ADAPTER_VERSION
+        ):
+            raise ValueError("Warmth projection requires adapter 3 / evidence v3")
         shoppers = validate_input(case.input)
         turns = response.structured["turns"]
         if not isinstance(turns, list) or len(turns) != len(shoppers):
@@ -313,9 +335,14 @@ def build_evidence(
                         product_ids,
                         codes,
                         retain_inventory=projection_version
-                        in {INVENTORY_PROJECTION_VERSION, PRODUCT_PROJECTION_VERSION},
+                        in {
+                            INVENTORY_PROJECTION_VERSION,
+                            PRODUCT_PROJECTION_VERSION,
+                            WARMTH_PROJECTION_VERSION,
+                        },
                         retain_products=projection_version
-                        == PRODUCT_PROJECTION_VERSION,
+                        in {PRODUCT_PROJECTION_VERSION, WARMTH_PROJECTION_VERSION},
+                        retain_warmth=projection_version == WARMTH_PROJECTION_VERSION,
                     ),
                 }
             )
@@ -349,6 +376,7 @@ def make_scorer(
         PROJECTION_VERSION,
         INVENTORY_PROJECTION_VERSION,
         PRODUCT_PROJECTION_VERSION,
+        WARMTH_PROJECTION_VERSION,
     }:
         raise ValueError("Unsupported Sales Agent semantic projection version")
     return RubricJudgeScorer(

@@ -125,7 +125,7 @@ cards or textual mentions. It also retains the v3 inventory behavior. These
 are observed facts, not a guessed name-to-ID mapping or imported catalogue.
 Promotion selection and error handling are unchanged. The existing 64 KiB UTF-8
 evidence limit rejects oversized payloads as ERROR before judging; no facts are
-silently truncated. No warmth/season fields are added.
+silently truncated. No warmth/season fields are added by this historical v4 projection.
 The human rating contract selects the same v4 evidence. It also selects the
 `salesagent-semantic-anchors-v1` output contract: 0.0, 0.3, 0.6, 0.8, 1.0.
 Other scores, including 0.7, are evaluator ERROR under this new profile. The
@@ -143,6 +143,44 @@ requests contain only shopper messages and session input. Sessions persist only
 between turns of one attempt and remain isolated across attempts and cases.
 Application validation and evidence projection stay in the Sales Agent pack;
 there are no study values or category-to-scorer mappings in generic core.
+
+## Opt-in warmth binding
+
+Existing defaults and frozen v4 configurations keep their original meaning.
+For a separately reviewed new Study configuration, select all three matching
+versions explicitly:
+
+| Binding | Historical default | Warmth opt-in |
+| --- | --- | --- |
+| Adapter | `2` | `3` |
+| Normalized evidence | `salesagent-evidence-v2` | `salesagent-evidence-v3` |
+| Semantic and human projection | `salesagent-semantic-evidence-v4` | `salesagent-semantic-evidence-v5` |
+
+Set the reviewed target-freeze request's adapter/evidence fields to the new pair,
+and pass `--projection-version salesagent-semantic-evidence-v5` when separately
+authorized to create a new execution contract. Python callers pass the same
+`projection_version` keyword to `freeze_execution()`. No omitted default silently
+upgrades a configuration; a v3 adapter with an unselected legacy projection is
+rejected. The recipe constructs its adapter from the recorded evidence version.
+
+Study execution validation reconstructs both semantic and rating profiles from
+`contract.rating.projection_version`, verifies their exact saved configurations,
+and checks the matching recorded target pair. Primary preparation, variance
+diagnostics, verification, human packets and judge construction all use this
+frozen selection. Unknown/mixed bindings fail before live factories are called.
+Existing v1 contract JSON shapes remain unchanged, and old configuration hashes
+remain reproducible. New projection/evaluator/profile/rating/execution and target
+configuration hashes identify the new evidence contract; dataset and suite hashes
+do not change. A new configuration is never presented as an identical historical
+evaluation, and archived evidence is never backfilled from current fixtures.
+
+V5 adds only the product's strict categorical warmth. It retains complete v4
+observations, conflicts, source order, current-turn association and the 64 KiB
+limit. Human review and judging share identical prepared evidence; the 12-case
+human roster and blinding sequence stay fixed. Case definitions, methodology,
+scorer/reference v3, rubric, anchors and thresholds are unchanged. Season remains
+deferred. These implementation capabilities do not approve or freeze candidates
+or authorize target/judge execution.
 
 ## Target and execution freeze
 

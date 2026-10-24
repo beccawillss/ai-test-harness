@@ -40,6 +40,7 @@ Percentage = Annotated[Money, Field(le=100)]
 Nonempty = Annotated[str, Field(min_length=1, pattern=r"\S")]
 Count = Annotated[int, Field(ge=0)]
 WaterproofRating = Literal["none", "water-resistant", "moderate", "high"]
+Warmth = Literal["none", "light", "medium", "high", "shell"]
 
 
 class Contract(BaseModel):
@@ -202,6 +203,17 @@ class SearchResult(Contract):
     count: Count
 
 
+class WarmthProduct(Product):
+    """Evidence v3 only; historical product normalization remains unchanged."""
+
+    warmth: Warmth
+
+
+class WarmthSearchResult(Contract):
+    products: list[WarmthProduct]
+    count: Count
+
+
 class Inventory(InventoryArguments):
     stock: Count | None = None
     available: bool
@@ -228,6 +240,11 @@ RESULTS: dict[str, type[Contract]] = {
     "get_product": Product,
     "check_inventory": Inventory,
     "validate_discount": Promotion,
+}
+WARMTH_RESULTS: dict[str, type[Contract]] = {
+    **RESULTS,
+    "search_products": WarmthSearchResult,
+    "get_product": WarmthProduct,
 }
 # These indicate rejected proposals or ordinary tool business outcomes, not
 # unavailable infrastructure. Unknown failure categories must fail closed.

@@ -1,0 +1,18 @@
+{
+  "salesagent-semantic-evidence-v2": {
+    "prepared": "9de582a944aa512ae0f7e3020b6034b98de5ce574f627641788c5d4fdcb6f221",
+    "configuration": "830ff7df3f9943c48886e65b7a58e0179051e6e7e4ab898771e563bfa438283a"
+  },
+  "salesagent-semantic-evidence-v3": {
+    "prepared": "94af1b3761d04e996fe3fd07ca9f5c854ad68d44bad4bafd4947f72c3da7aaad",
+    "configuration": "01f4479fb2aed235f49a1f37f2c5a41a219d0b2a2ffd9052dba7a1544b736614"
+  },
+  "salesagent-semantic-evidence-v4": {
+    "prepared": "3039b7e8907fcad19debd2de3bdd58834333d2abf374debc642d7e354e3b4bdb",
+    "configuration": "bb3e019ac699a0eba880551d4e4c0fcf6a38956e862dfdb7d9493985d343f170"
+  },
+  "capture_profile": "5f213df23d3281c4240b924b013c5740dca18343c113b81ff14d4086a69d1770",
+  "semantic_profile": "c2b40f58104d507fd193b60af000470c64b75c5eccdb2354191b84e08a8191db",
+  "rating": "03142bcc3c7eed90763fa1979cf2772c2f64b03a9881e5195ef651fed603701e",
+  "execution": "e9f47d68a81aa476aeded815b83ffaed1a2ca6e2ec6b54074cb52ea478034219"
+}

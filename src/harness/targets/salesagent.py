@@ -17,6 +17,7 @@ from harness.targets._salesagent_contract import (
     ARGUMENTS,
     BUSINESS_ERRORS,
     RESULTS,
+    WARMTH_RESULTS,
     Chat,
     Constraints,
     Tool,
@@ -26,6 +27,17 @@ from harness.targets._salesagent_contract import (
 
 EVIDENCE_VERSION = "salesagent-evidence-v2"
 ADAPTER_VERSION = "2"
+WARMTH_EVIDENCE_VERSION = "salesagent-evidence-v3"
+WARMTH_ADAPTER_VERSION = "3"
+
+
+def adapter_version_for(evidence_version: str) -> str:
+    """Select a supported normalization policy before constructing a client."""
+    if evidence_version == EVIDENCE_VERSION:
+        return ADAPTER_VERSION
+    if evidence_version == WARMTH_EVIDENCE_VERSION:
+        return WARMTH_ADAPTER_VERSION
+    raise ValueError("Unsupported Sales Agent evidence version")
 
 
 class SalesAgentError(RuntimeError):
@@ -43,7 +55,9 @@ def validate_input(value: Any) -> list[str]:
     return list(turns)
 
 
-def _tool(tool: Tool) -> ToolCall:
+def _tool(tool: Tool, *, evidence_version: str = EVIDENCE_VERSION) -> ToolCall:
+    adapter_version_for(evidence_version)
+    results = WARMTH_RESULTS if evidence_version == WARMTH_EVIDENCE_VERSION else RESULTS
     envelope = ToolResult.model_validate(tool.result)
     if envelope.tool_name != tool.tool_name or envelope.success != (
         tool.status == "success"
@@ -58,7 +72,7 @@ def _tool(tool: Tool) -> ToolCall:
         if error is not None or envelope.data is None:
             raise ValueError("Invalid successful tool evidence")
         data = (
-            RESULTS[tool.tool_name]
+            results[tool.tool_name]
             .model_validate(envelope.data)
             .model_dump(mode="json")
         )
@@ -100,6 +114,7 @@ class SalesAgentTarget:
         base_url: str,
         *,
         target_revision: str | None = None,
+        evidence_version: str = EVIDENCE_VERSION,
         client: httpx.Client | None = None,
         transport: httpx.BaseTransport | None = None,
         connect_timeout: float = 5,
@@ -107,6 +122,8 @@ class SalesAgentTarget:
         write_timeout: float = 10,
         pool_timeout: float = 5,
     ) -> None:
+        self.adapter_version = adapter_version_for(evidence_version)
+        self.evidence_version = evidence_version
         try:
             url = httpx.URL(base_url)
             if (
@@ -144,8 +161,8 @@ class SalesAgentTarget:
         return {
             "base_url": self.base_url,
             "target_revision": self.target_revision,
-            "adapter_version": ADAPTER_VERSION,
-            "evidence_schema_version": EVIDENCE_VERSION,
+            "adapter_version": self.adapter_version,
+            "evidence_schema_version": self.evidence_version,
             "http_contract_version": "1.0.0",
             "timeouts": self.timeout.as_dict(),
         }
@@ -224,7 +241,10 @@ class SalesAgentTarget:
                     raise SalesAgentError("tool sequence inconsistency")
                 if any(e.code not in BUSINESS_ERRORS for e in trace.errors):
                     raise SalesAgentError("trace execution unavailable")
-                calls = [_tool(t) for t in trace.tool_calls]
+                calls = [
+                    _tool(t, evidence_version=self.evidence_version)
+                    for t in trace.tool_calls
+                ]
                 trajectory.extend(calls)
                 structured = chat.model_dump(
                     mode="json", include={"recommendations", "promotion", "pricing"}
@@ -312,8 +332,8 @@ class SalesAgentTarget:
             trajectory=trajectory,
             latency_ms=(perf_counter() - started) * 1000,
             metadata={
-                "evidence_schema_version": EVIDENCE_VERSION,
-                "adapter_version": ADAPTER_VERSION,
+                "evidence_schema_version": self.evidence_version,
+                "adapter_version": self.adapter_version,
                 "target_revision": self.target_revision,
                 "target_revision_source": "operator"
                 if self.target_revision != "unknown"

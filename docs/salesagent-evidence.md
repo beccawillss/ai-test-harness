@@ -1,4 +1,21 @@
-# Sales Agent evidence v2
+# Sales Agent evidence versions
+
+Adapter 2 / `salesagent-evidence-v2` remains the default. An explicitly selected
+`SalesAgentTarget(..., evidence_version="salesagent-evidence-v3")` uses adapter 3
+and retains one additional authoritative product field, `warmth`, in successful
+lookup/search results. Both normalized per-turn calls and the aggregate trajectory
+retain it on the original product observation. Configuration and response metadata
+record the selected adapter/evidence pair. Unsupported selections fail before
+HTTP client construction; this does not change HTTP contract `1.0.0`.
+
+Warmth is the exact categorical enum `none | light | medium | high | shell`.
+Adapter 3 requires it on every successful product observation, including each
+search result; missing/null/unknown/incorrectly typed values are malformed
+contract evidence (ERROR). No casefolding, whitespace broadening, numeric ranking,
+temperature claim or inference from other fields is introduced. Failed tools and
+empty searches do not invent product facts. Product `season` stays excluded.
+Adapter 2 retains its original product projection, including discarding warmth.
+Old responses/configurations are never relabeled or backfilled.
 
 `SalesAgentTarget` calls only the V1 chat/trace HTTP routes. It imports no target
 application code. Install with `uv sync --extra salesagent`.

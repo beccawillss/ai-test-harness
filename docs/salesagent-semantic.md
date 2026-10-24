@@ -7,6 +7,26 @@ clarity/actionability, agreement between prose and commerce evidence, and
 conversation coherence. The judge is not calibrated against human labels yet.
 No live semantic acceptance has been performed by this implementation.
 
+## Optional warmth evidence v5
+
+The generic semantic factory still defaults to evidence v2, and explicit v3/v4
+retain their existing prepared/configuration bytes. Explicit
+`projection_version="salesagent-semantic-evidence-v5"` adds the exact authoritative
+product `warmth` enum from adapter 3 / `salesagent-evidence-v3` observations.
+The v5 builder requires those matching response metadata labels, retains all
+successful lookup/search observations (including prose-only alternatives), and
+preserves v4 inventory/promotion behavior, order, conflicts and per-turn provenance.
+No later observation fills an earlier turn, and no catalogue import or inference
+fills missing warmth. Missing/invalid warmth is ERROR before judgment, even if
+an untrusted recommendation card claims to supply it. Valid contradictory facts
+remain visible rather than being deduplicated or resolved by the projection.
+
+The existing 64 KiB UTF-8 evidence limit applies unchanged, with no truncation.
+Warmth is not a temperature scale; `shell` must not be translated into an
+insulation rating. Season expansion is excluded. The rubric, anchors and 0.7
+threshold do not change. For Study v1, use the explicit, frozen version selection
+in the [Study workflow](salesagent-study-adoption.md#opt-in-warmth-binding).
+
 ## Prepare independently
 
 Prepare locked dependencies separately:

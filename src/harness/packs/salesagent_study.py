@@ -64,7 +64,14 @@ from harness.packs import salesagent_semantic as semantic
 from harness.packs.salesagent_rules import StudyLabelAssertionsScorer, validate_rules
 from harness.scorers.output_contracts import ScoreOutputContract
 from harness.scorers.rubric_judge import RubricJudgeScorer
-from harness.targets.salesagent import ADAPTER_VERSION, EVIDENCE_VERSION, validate_input
+from harness.targets.salesagent import (
+    ADAPTER_VERSION,
+    EVIDENCE_VERSION,
+    WARMTH_ADAPTER_VERSION,
+    WARMTH_EVIDENCE_VERSION,
+    adapter_version_for,
+    validate_input,
+)
 
 METHODOLOGY_COMMIT = "5995e24d59d3e5795df0429a940f01a638974dd3"
 METHODOLOGY_HASH = "5de0400bc3de7d910902d72b2d7199aab81d0b553e733faabfe0f4da91fa9ace"
@@ -114,11 +121,24 @@ def capture_profile() -> tuple[StudyLabelAssertionsScorer, EvaluationProfile]:
     )
 
 
+def evidence_version_for_projection(projection_version: str) -> str:
+    """The two reviewed Study bindings; never infer an upgrade from evidence."""
+    if projection_version == semantic.PRODUCT_PROJECTION_VERSION:
+        return EVIDENCE_VERSION
+    if projection_version == semantic.WARMTH_PROJECTION_VERSION:
+        return WARMTH_EVIDENCE_VERSION
+    raise ValueError("Unsupported Study semantic projection version")
+
+
 def semantic_profile(
-    judge: JudgeConfiguration, judge_fn: Callable[[str], str | JudgeReply] = _no_judge
+    judge: JudgeConfiguration,
+    judge_fn: Callable[[str], str | JudgeReply] = _no_judge,
+    *,
+    projection_version: str = semantic.PRODUCT_PROJECTION_VERSION,
 ) -> tuple[RubricJudgeScorer, EvaluationProfile]:
+    evidence_version_for_projection(projection_version)
     scorer = semantic.make_scorer(
-        judge_fn, judge.model, projection_version=semantic.PRODUCT_PROJECTION_VERSION
+        judge_fn, judge.model, projection_version=projection_version
     )
     scorer.output_validation = ANCHORS
     return scorer, EvaluationProfile(
@@ -134,11 +154,14 @@ def semantic_profile(
     )
 
 
-def rating_contract() -> RatingContract:
+def rating_contract(
+    *, projection_version: str = semantic.PRODUCT_PROJECTION_VERSION
+) -> RatingContract:
+    evidence_version_for_projection(projection_version)
     scorer = semantic.make_scorer(
         _no_judge,
         "preparation-only",
-        projection_version=semantic.PRODUCT_PROJECTION_VERSION,
+        projection_version=projection_version,
     )
     return RatingContract(
         rubric=semantic.RUBRIC,
@@ -146,7 +169,7 @@ def rating_contract() -> RatingContract:
         scale="anchors",
         anchors=ANCHORS.anchors,
         threshold=0.7,
-        projection_version=semantic.PRODUCT_PROJECTION_VERSION,
+        projection_version=projection_version,
         prompt_version=semantic.PROMPT_VERSION,
         judgment_version=semantic.JUDGMENT_VERSION,
         evidence_settings_json=canonical_json(scorer.evidence_settings),
@@ -450,13 +473,19 @@ class StudyTargetFreeze(Frozen):
             CAPABILITIES
         ):
             missing.append("requested.capabilities")
-        for k, v in (
-            ("adapter_version", ADAPTER_VERSION),
-            ("evidence_schema_version", EVIDENCE_VERSION),
-            ("http_contract_version", "1.0.0"),
+        for k, supported in (
+            ("adapter_version", {ADAPTER_VERSION, WARMTH_ADAPTER_VERSION}),
+            ("evidence_schema_version", {EVIDENCE_VERSION, WARMTH_EVIDENCE_VERSION}),
+            ("http_contract_version", {"1.0.0"}),
         ):
-            if getattr(r, k) is not None and getattr(r, k) != v:
+            if getattr(r, k) is not None and getattr(r, k) not in supported:
                 missing.append(f"requested.{k}:unsupported")
+        if (
+            r.adapter_version in {ADAPTER_VERSION, WARMTH_ADAPTER_VERSION}
+            and r.evidence_schema_version in {EVIDENCE_VERSION, WARMTH_EVIDENCE_VERSION}
+            and adapter_version_for(r.evidence_schema_version) != r.adapter_version
+        ):
+            missing.append("requested.adapter_evidence_pair:unsupported")
         if self.harness_revision is None:
             missing.append("harness_revision")
         if self.verification is None:
@@ -500,7 +529,17 @@ class StudyExecutionContract(Frozen):
         ):
             raise ValueError("Execution methodology/matrix differs")
         _, capture = capture_profile()
-        scoring, profile = semantic_profile(self.evaluator.judge)
+        version = self.rating.projection_version
+        evidence_version = evidence_version_for_projection(version)
+        if (
+            self.target.requested.evidence_schema_version != evidence_version
+            or self.target.requested.adapter_version
+            != adapter_version_for(evidence_version)
+        ):
+            raise ValueError("Execution evaluator/target evidence versions differ")
+        scoring, profile = semantic_profile(
+            self.evaluator.judge, projection_version=version
+        )
         if (
             self.capture_profile_json != canonical_json(capture.model_dump(mode="json"))
             or self.semantic_profile_json
@@ -508,7 +547,7 @@ class StudyExecutionContract(Frozen):
             or self.evaluator.scorer_json
             != canonical_json(scoring.preparation_configuration)
             or self.output_contract != ANCHORS
-            or self.rating != rating_contract()
+            or self.rating != rating_contract(projection_version=version)
         ):
             raise ValueError("Execution evaluator/profile/anchors differ")
         selectors = {
@@ -535,12 +574,13 @@ def freeze_execution(
     diagnostic_judge_calls: int,
     author_review: str,
     reviewed_at: datetime,
+    projection_version: str = semantic.PRODUCT_PROJECTION_VERSION,
 ) -> StudyExecutionContract:
     validation = validate_study(study.dataset, study.suites)
     if validation != study.validation:
         raise ValueError("Study changed after validation")
     matrix = matrix_contract()
-    scoring, profile = semantic_profile(judge)
+    scoring, profile = semantic_profile(judge, projection_version=projection_version)
     return StudyExecutionContract(
         validation=validation,
         capture_profile_json=canonical_json(
@@ -551,7 +591,7 @@ def freeze_execution(
             scorer_json=canonical_json(scoring.preparation_configuration), judge=judge
         ),
         output_contract=ANCHORS,
-        rating=rating_contract(),
+        rating=rating_contract(projection_version=projection_version),
         selectors_json=canonical_json(
             {
                 "human": matrix["human"],
@@ -803,7 +843,9 @@ def prepare_primary(
                 requires_human=c.case_id in protected,
             )
         )
-    scoring, _ = semantic_profile(contract.evaluator.judge)
+    scoring, _ = semantic_profile(
+        contract.evaluator.judge, projection_version=contract.rating.projection_version
+    )
     plan = ProspectiveJudgingPlan(
         plan_id=plan_id,
         selections=tuple(selections),
@@ -876,7 +918,9 @@ def prepare_variance_diagnostic(
         taxonomy_evidence="excluded",
         sharing_policy="evaluation_data",
     )
-    scoring, _ = semantic_profile(contract.evaluator.judge)
+    scoring, _ = semantic_profile(
+        contract.evaluator.judge, projection_version=contract.rating.projection_version
+    )
     request = prepare_prospective(
         plan,
         source,
@@ -922,7 +966,9 @@ def verify_preparation(
     first = bundle.requests[0]
     source, _, document_hash = source_loader(first.source)
     suite_id = verify_capture(study, contract, source, document_hash)
-    scorer, _ = semantic_profile(contract.evaluator.judge)
+    scorer, _ = semantic_profile(
+        contract.evaluator.judge, projection_version=contract.rating.projection_version
+    )
     if preparation.mode == "primary":
         if (
             suite_id != "full"
@@ -1032,7 +1078,9 @@ def judge_request(
     matches = [r for r in preparation.bundle.requests if r.request_id == request_id]
     if len(matches) != 1:
         raise ValueError("Unknown selected study request")
-    scorer, _ = semantic_profile(contract.evaluator.judge)
+    scorer, _ = semantic_profile(
+        contract.evaluator.judge, projection_version=contract.rating.projection_version
+    )
     return execute_prospective(
         matches[0],
         source_loader=source_loader,
