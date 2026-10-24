@@ -7,7 +7,7 @@ import pytest
 from test_replay import settings
 from test_salesagent_semantic import target_response
 from test_salesagent_study import prepared
-from test_salesagent_study_cases import definition, product, response
+from test_salesagent_study_cases import definition, p1_reviewed_cases, product, response
 from test_salesagent_study_corrections import inventory_response, synchronize, tool
 
 from harness.core.fingerprints import fingerprint
@@ -427,7 +427,7 @@ def test_complete_inventory_response_still_rejects_unrelated_faults(
     assert study.capture_profile()[0].score(case, synchronize(r)).passed is False
 
 
-def test_other_assertions_and_feature_array_order_are_unchanged(cases):
+def test_other_assertions_and_historical_feature_order_are_unchanged(cases):
     case = cases["SA-REC-001"]
     r = valid_response(case)
     r.structured["turns"][0]["structured"]["recommendations"][0]["price"] = "110.01"
@@ -436,7 +436,9 @@ def test_other_assertions_and_feature_array_order_are_unchanged(cases):
     r = response(case)
     assert study.capture_profile()[0].score(case, r).passed
     r.structured["turns"][0]["trajectory"][0]["result"]["features"].reverse()
-    assert study.capture_profile()[0].score(case, r).passed is False
+    assert study.capture_profile()[0].score(case, r).passed is True
+    old = next(c for c in p1_reviewed_cases() if c.id == case.id)
+    assert study.capture_profile()[0].score(old, r).passed is False
     # A dictionary masquerading as a feature list must not broaden label matching.
     case = assertion_case(
         cases["SA-REC-001"],
@@ -748,7 +750,7 @@ def test_previous_scorer_and_semantic_bindings_remain_reproducible(cases, tmp_pa
                 old.score(c, response(c, cards=("JKT-001", "JKT-003"))).model_dump(
                     mode="json"
                 )
-                for c in cases.values()
+                for c in p1_reviewed_cases()
             ]
         )
         == "4472d4d02a8092e9c5e999b8ea689d9b0326f7250961cfbc074b902352394d7d"
@@ -813,5 +815,5 @@ def test_human_judge_v4_bindings_and_stale_versions_are_checked(tmp_path):
     assert study.capture_profile()[0].schema_version == "salesagent-study-assertions-v3"
     assert (
         definition().validation.full_case_hash
-        == "bde063c5b1fcb845e3b18d6c489f26b72c549a700423b69122d37d8fd29d4bf9"
+        == "4db62cceec19881853a2d921e886edd4866cfef976b5c209bd06da486ec5e257"
     )

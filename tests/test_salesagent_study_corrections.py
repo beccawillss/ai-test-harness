@@ -6,7 +6,7 @@ import pytest
 from test_replay import settings
 from test_salesagent_semantic import target_response
 from test_salesagent_study import contract
-from test_salesagent_study_cases import definition, product, response
+from test_salesagent_study_cases import definition, p1_reviewed_cases, product, response
 
 from harness.core.fingerprints import canonical_json, fingerprint
 from harness.core.models import Score, ScorerKind, ToolCall, Verdict
@@ -531,7 +531,7 @@ def test_candidate_revision_preserves_inputs_classification_and_semantics():
             **{k: v for k, v in c.model_dump(mode="json").items() if k != "reference"},
             "semantic": c.reference["semantic"],
         }
-        for c in d.dataset.cases
+        for c in p1_reviewed_cases()
     ]
     # Captured before the approved corrections, not derived from changed outputs.
     assert (
@@ -540,8 +540,9 @@ def test_candidate_revision_preserves_inputs_classification_and_semantics():
     )
     assert (
         d.validation.full_case_hash
-        == "bde063c5b1fcb845e3b18d6c489f26b72c549a700423b69122d37d8fd29d4bf9"
+        == "4db62cceec19881853a2d921e886edd4866cfef976b5c209bd06da486ec5e257"
     )
     assert [c.id for c in d.dataset.cases if c.reference.get("salesagent_rules")] == [
-        "SA-ADV-001"
+        "SA-ADV-001",
+        "SA-ADV-005",
     ]
