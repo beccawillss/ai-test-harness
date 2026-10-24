@@ -664,8 +664,15 @@ def test_command_help_validation_and_live_gates_construct_no_clients(
     assert "salesagent-study-validation-v1" in capsys.readouterr().out
 
 
+@pytest.mark.parametrize(
+    "projection_version",
+    [
+        study.semantic.PRODUCT_PROJECTION_VERSION,
+        study.semantic.WARMTH_PROJECTION_VERSION,
+    ],
+)
 def test_thin_recipe_offline_pipeline_with_injected_fakes(
-    tmp_path, monkeypatch, capsys
+    tmp_path, monkeypatch, capsys, projection_version
 ):
     import importlib
 
@@ -678,7 +685,20 @@ def test_thin_recipe_offline_pipeline_with_injected_fakes(
     monkeypatch.syspath_prepend(str(Path("examples").resolve()))
     recipe = importlib.import_module("salesagent_study")
     d = definition(tmp_path / "data")
-    c = contract(d)
+    if projection_version == study.semantic.WARMTH_PROJECTION_VERSION:
+        c = study.freeze_execution(
+            d,
+            target_freeze(
+                adapter_version="3", evidence_schema_version="salesagent-evidence-v3"
+            ),
+            settings(),
+            diagnostic_judge_calls=3,
+            author_review="SYNTHETIC versioned recipe only",
+            reviewed_at=datetime.now(UTC),
+            projection_version=projection_version,
+        )
+    else:
+        c = contract(d)
     _save(tmp_path / "contract", c)
     common = [
         "--descriptor",
@@ -692,17 +712,25 @@ def test_thin_recipe_offline_pipeline_with_injected_fakes(
 
     def target(freeze):
         calls.append("target")
+
+        def warmth(_request, payload):
+            for call in payload.get("tool_calls", []):
+                call["result"]["data"]["warmth"] = "shell"
+
         return SalesAgentTarget(
             "http://fake",
             target_revision="1" * 40,
-            transport=httpx.MockTransport(FakeHTTP()),
+            evidence_version=freeze.requested.evidence_schema_version,
+            transport=httpx.MockTransport(FakeHTTP(warmth)),
         )
 
-    def judge(config):
+    def judge(config, *, projection_version):
         calls.append("judge")
         return ProspectiveJudge(
             study.semantic_profile(
-                config, lambda _: '{"score":0.8,"reason":"synthetic"}'
+                config,
+                lambda _: '{"score":0.8,"reason":"synthetic"}',
+                projection_version=projection_version,
             )[0],
             lambda: config,
         )

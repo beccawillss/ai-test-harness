@@ -1,5 +1,203 @@
 # Study v1 pre-freeze quality corrections
 
+## Warmth commit and PR authorization — final verification
+
+The user reviewed the warmth implementation handoff and authorized commit/push
+of `feat/study-v1-warmth-evidence` and PR preparation against `main`. This
+supersedes the implementation-stage commit/push restriction below. Formal human
+QA, actual Study freeze, live target/judge execution and PR merge remain separate
+human decisions.
+
+A fresh fetch confirms the feature branch starts exactly at current `origin/main`
+`da85619c6b743bc73ab4ef425d49a1482934c1ed` (merged P2 PR #17); no transfer, merge,
+rebase or implementation reconciliation is required. Complete review confirms
+exactly the approved 14 changed/new files. All 142 other tracked files are
+byte-identical to main, including every dataset/suite file, methodology,
+authoring specification, matrix, historical data and the existing discount scorer.
+The original dirty checkout and all 45 inspected Sales Agent application files
+retain their pre-implementation hashes.
+
+The explicit new Study tuple is adapter `3`, `salesagent-evidence-v3`,
+`salesagent-semantic-evidence-v5`. Target metadata/configuration, prepared scorer
+configuration and human rating bind the same selected versions. Every subsequent
+Study stage reconstructs profiles from that recorded binding. Unsupported/mixed
+pairs are rejected before live factories; the legacy defaults remain adapter 2 /
+evidence v2 / Study semantic v4 (generic semantic v2). AST comparisons additionally
+confirm the old product/search models, rubric, payload limit and historical
+projection constants are unchanged. Historical prepared/configuration snapshots
+and the archived synthetic execution remain valid without relabeling or backfill.
+
+Final pre-commit verification re-ran the complete offline suite: **2,240 passed
+in 100.47 seconds**, including all 120 warmth regressions, both recipe versions,
+P1/P2 controls and historical compatibility checks. The prior **997 focused tests**
+remain applicable: implementation, fixtures and tests are unchanged. Ruff,
+mypy (40 source files), formatting of all seven changed Python files, whitespace
+and protected-file checks pass again. Repository-wide formatting reports exactly
+the same three inherited files (`docs/test-taxonomy-and-suites.md`,
+`src/harness/targets/base.py`, `tests/test_dataset.py`); all match current main.
+
+All 50 definitions remain unchanged, with full fingerprint
+`4db62cceec19881853a2d921e886edd4866cfef976b5c209bd06da486ec5e257`.
+The six suite fingerprints, memberships and attempts remain unchanged:
+full 50×1, smoke 8×1, critical 12×1, multi-turn 20×1, adversarial 8×1,
+variance 10×3. Rubric, anchors, thresholds, reserved human roster and methodology
+are unchanged. Only this Git-handoff documentation and the candidate-review note
+were added after implementation approval. The PR description includes exact
+contract/version changes, verification, changed-file summary and limitations.
+No actual Study execution contract, human approval or freeze is created by this
+handoff; the compatibility fixtures and fake pipeline receipts remain test-only.
+
+## Approved opt-in warmth extension — implemented; human review pending
+
+The user approved adapter 3 / normalized evidence v3 / semantic evidence v5,
+explicit Study version bindings and historical compatibility. Work starts from
+current main `da85619` (merged P2 PR #17), in isolated branch
+`feat/study-v1-warmth-evidence` at
+`/private/tmp/ai-test-harness-study-v1-warmth`. Existing changes in the original
+checkout are preserved. No live execution, commit, push, merge or Study freeze
+is authorized.
+
+Design recorded before production edits:
+
+- Add separate strict warmth-aware product/search models and an explicit adapter
+  evidence-version selector. Keep adapter 2/evidence v2 and its default bytes.
+- Add semantic v5 with a separate product model and required evidence-v3 metadata;
+  preserve every successful current-turn observation, ordering, conflicts,
+  provenance and the 64 KiB UTF-8 limit. Warmth is an exact category, with no
+  coercion, ranking, temperature inference or season expansion.
+- Add explicit projection selection to Study profile/rating/contract creation.
+  Reconstruct all later stages from the frozen rating projection binding and
+  verify its target adapter/evidence pairing. Preserve old defaults and v1 JSON
+  shapes; reject unsupported/mixed bindings before client construction.
+- Use the same prepared evidence for human packets and semantic judging. Keep
+  the reserved human roster, rubric, anchors, threshold, case/suite definitions,
+  historical data, generic engine and target application unchanged.
+- Pin pre-change semantic v2/v3/v4 prepared/configuration hashes and a clearly
+  synthetic historical Study execution fixture before editing. Verify backwards
+  interpretation as well as malformed/new evidence, client-construction guards,
+  all four warmth scenarios and real multi-product/source-turn associations.
+
+Baseline compatibility checks and snapshots preceded production edits: **181
+existing compatibility tests passed** (5.69 seconds). The two test-only fixture
+files pin pre-change v2/v3/v4 prepared/configuration hashes, unchanged profile and
+rating hashes, and a clearly synthetic fixed-timestamp execution configuration.
+They are not actual Study freeze artifacts or human approval records.
+
+Implementation and verification complete:
+
+- [x] Separate `WarmthProduct` / `WarmthSearchResult` and semantic `_WarmthProduct`
+  require `none | light | medium | high | shell`. Existing product models and the
+  discount rule remain unchanged. Every lookup/search product keeps its own
+  value; no numeric ordering, inference, normalization aliases or season fields.
+- [x] Explicit `SalesAgentTarget(..., evidence_version="salesagent-evidence-v3")`
+  selects adapter 3, reports the matching configuration/response metadata, and
+  preserves warmth in both trajectory views. The old constructor default and
+  adapter 2 output remain unchanged. Unsupported selection fails before creating
+  an HTTP client. Failed business tools/empty searches do not invent warmth.
+- [x] V5 requires adapter-3/evidence-v3 metadata and retains successful product
+  observations in their original turn and order, including duplicate/conflicting
+  records. Valid warmth conflicts survive; missing/invalid source warmth is ERROR.
+  Cards/prose never supply a replacement field. V4 inventory/promotion behavior
+  and the exact 64 KiB UTF-8 boundary remain unchanged, with no truncation.
+- [x] Study semantic/rating/creation factories accept explicit projection selection;
+  legacy defaults stay v4. Existing recorded rating projection and target version
+  fields reconstruct the exact profile in validation, primary/variance preparation,
+  verification, packet export and judge construction. The two reviewed Study
+  tuples are 2/evidence-v2/semantic-v4 and 3/evidence-v3/semantic-v5. Mixed/unknown
+  tuples fail before live factories. No v1 contract JSON fields/schema were added.
+- [x] The CLI's pure configuration command exposes `--projection-version`; omitting
+  it with adapter 3 fails instead of silently upgrading. The target factory uses
+  the frozen evidence version, and the judge factory uses the frozen projection.
+  Both complete v4 and v5 recipe pipelines pass with injected fakes and synthetic
+  human receipts. These tests do not freeze or execute the actual Study.
+- [x] Positive complete HTTP-response controls cover REC-004/008, GRD-002, RCV-005,
+  lookup/search, 17 products/all five values, multi-product associations and
+  aggregate/per-turn correspondence. Negative controls cover malformed/missing
+  values, invalid metadata, client-construction guards, old/mixed bindings,
+  conflicting observations, source order, turn/attempt/case isolation, strict byte
+  limits and preserved independent capture scores when projection errors.
+- [x] The real 50 candidate definitions are also used with synthetic HTTP responses
+  to exercise persistence, preparation and the exact 12-case blind human packet.
+  Every prepared request matches direct preparation with the recorded scorer;
+  every human packet evidence JSON matches its prepared judge request. Synthetic
+  judgments/target responses are workflow tests, not live quality observations.
+- [x] Historical prepared/configuration hashes and a complete pre-extension Study
+  execution snapshot remain reproducible. Archived responses are never backfilled,
+  relabeled or migrated. The shared old semantic product model/discount scorer,
+  rubric, anchors, threshold, core runner/storage and historical datasets/results
+  are untouched.
+
+| Final check | Result |
+| --- | --- |
+| Focused adapter/semantic/Study/P1/P2/human/calibration selection | **997 passed**, 64.02 seconds |
+| Full offline `python -m pytest -q` | **2,240 passed**, 101.47 seconds |
+| New warmth regression module | 120 cases, covered in focused/full results |
+| Additional parameterized v5 recipe pipeline | Passed alongside legacy v4 |
+| `ruff check .` | Passed |
+| `mypy src` | Passed, 40 source files |
+| Changed-Python `ruff format --check` | Passed, 7 files |
+| Repository-wide formatting | Same 3 inherited failures; 121 files already formatted |
+| `git diff --check` and protected-file hashes | Passed |
+
+All commands use the existing environment and `PYTHONPATH=src` from this isolated
+worktree. The default pytest socket blocker remains active. The focused selection
+includes `test_salesagent_warmth`, `test_salesagent_target`,
+`test_salesagent_semantic`, all five `test_salesagent_study*` modules, `test_salesagent_human_calibration`,
+`test_calibration_io` and `test_calibration_reporting`.
+
+The inherited formatting failures are `docs/test-taxonomy-and-suites.md`,
+`src/harness/targets/base.py` and `tests/test_dataset.py`; all match their pre-edit
+main hashes and were left outside scope. All 142 other tracked files, all dataset
+files, 50 candidate definitions, descriptor, six suite definitions/bindings,
+methodology, authoring specification and matrix remain byte-identical. All nine
+original dirty/untracked files and all 45 inspected Sales Agent application files
+also match their pre-edit hashes. No application change or live request occurred.
+
+### Warmth fingerprint impact
+
+Full ordered candidate hash stays
+`4db62cceec19881853a2d921e886edd4866cfef976b5c209bd06da486ec5e257`.
+All six suite-definition and selected-case hashes remain unchanged from merged P2.
+Capture schema/reference remain v3; its profile hash stays
+`5f213df23d3281c4240b924b013c5740dca18343c113b81ff14d4086a69d1770`.
+The rubric/expectations/prompt/judgment/anchor versions and threshold stay unchanged.
+Adapter 3/evidence v3 changes target configuration and response evidence hashes;
+semantic v5 changes prepared evidence/configuration, profile, human-rating and
+execution bindings. Defaults and old-version hashes do not change.
+
+For the same **synthetic** judge settings and fixed timestamps used in the
+historical regression fixture (these are not deployment/freeze attestations):
+
+| Binding | Historical v4 | Warmth v5 |
+| --- | --- | --- |
+| Semantic profile | `c2b40f58104d507fd193b60af000470c64b75c5eccdb2354191b84e08a8191db` | `a34c50f875c48cd2e87f43d79476fce6baa10b8c377bd552a1ec91ccdce57ebb` |
+| Human rating contract | `03142bcc3c7eed90763fa1979cf2772c2f64b03a9881e5195ef651fed603701e` | `4dd7ded009ed718b4bfa8af730afc7c973339c215443a4b2cfd7f5dd36d724b8` |
+| Synthetic execution contract | `e9f47d68a81aa476aeded815b83ffaed1a2ca6e2ec6b54074cb52ea478034219` | `c4025e1d09918e95c7a1c32c159d47bea03d216ffd2c9a979fb3afc0be59acb3` |
+
+Actual future execution hashes must be generated from separately reviewed target,
+judge and configuration facts. No existing execution or human annotation is
+silently upgraded; the new binding is a distinct evaluation configuration.
+
+Changed files (14):
+
+- Adapter: `src/harness/targets/_salesagent_contract.py`, `src/harness/targets/salesagent.py`.
+- Pack: `src/harness/packs/salesagent_semantic.py`, `src/harness/packs/salesagent_study.py`.
+- Recipe: `examples/salesagent_study.py`.
+- Tests: `tests/test_salesagent_study.py`, new `tests/test_salesagent_warmth.py`.
+- Synthetic fixtures: `tests/fixtures/salesagent_study/pre-warmth-bindings.json`, `tests/fixtures/salesagent_study/pre-warmth-execution.json`.
+- Guides: `docs/salesagent-evidence.md`, `docs/salesagent-semantic.md`, `docs/salesagent-study-adoption.md`.
+- Review/plan: `docs/studies/sales-agent-evaluation-study-v1-authoring-review.md`, `docs/plans/salesagent-study-v1-quality-corrections.md`.
+
+Remaining limitations: categorical warmth supplies no temperature guarantee or
+numeric ranking; source observations can be absent or conflicting; added bytes
+can cause a previously near-limit payload to become ERROR; season remains
+excluded. Old configurations deliberately remain on their original projection.
+The new Study must explicitly select v5 after human review. Fake judgments verify
+routing/gates, not real semantic accuracy. Recorded formal QA for all 50 cases,
+verified deployment/judge facts, final committed configuration identities and
+separately authorized freeze/live execution remain outstanding. No commit, push,
+merge or actual Study freeze was performed; the isolated changes await review.
+
 ## P2 commit and PR authorization and final verification
 
 The user reviewed the P2 handoff and authorized committing/pushing

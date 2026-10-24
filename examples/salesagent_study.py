@@ -29,19 +29,27 @@ REPOSITORY = Path(__file__).resolve().parents[1]
 
 def make_target(freeze: pack.StudyTargetFreeze):
     # Called only after explicit live gates, freeze validation and preflight.
+    freeze.require_complete()
     from harness.targets.salesagent import SalesAgentTarget
 
     r = freeze.requested
     assert r.base_url is not None and r.timeouts is not None
+    assert r.evidence_schema_version is not None
     return SalesAgentTarget(
         r.base_url,
         target_revision=r.deployed_target_commit_sha,
+        evidence_version=r.evidence_schema_version,
         **{f"{k}_timeout": v for k, v in r.timeouts.model_dump().items()},
     )
 
 
-def make_judge(config: JudgeConfiguration) -> ProspectiveJudge:
+def make_judge(
+    config: JudgeConfiguration,
+    *,
+    projection_version: str = pack.semantic.PRODUCT_PROJECTION_VERSION,
+) -> ProspectiveJudge:
     # Credentials are read only inside the deferred, post-receipt live factory.
+    pack.evidence_version_for_projection(projection_version)
     from harness.judges.openai import OpenAIJudge
 
     supported = JudgeConfiguration.model_validate(
@@ -61,7 +69,9 @@ def make_judge(config: JudgeConfiguration) -> ProspectiveJudge:
         max_output_tokens=config.max_output_tokens,
         **{f"{k}_timeout": v for k, v in config.timeouts.model_dump().items()},
     )
-    scorer, _ = pack.semantic_profile(config, judge)
+    scorer, _ = pack.semantic_profile(
+        config, judge, projection_version=projection_version
+    )
     return ProspectiveJudge(
         scorer,
         lambda: JudgeConfiguration.model_validate(judge.configuration),
@@ -114,6 +124,14 @@ def parser() -> argparse.ArgumentParser:
             cmd.add_argument("--author-review", required=True)
             cmd.add_argument("--reviewed-at", required=True)
             cmd.add_argument("--diagnostic-budget", type=int, required=True)
+            cmd.add_argument(
+                "--projection-version",
+                choices=(
+                    pack.semantic.PRODUCT_PROJECTION_VERSION,
+                    pack.semantic.WARMTH_PROJECTION_VERSION,
+                ),
+                default=pack.semantic.PRODUCT_PROJECTION_VERSION,
+            )
         if command == "capture":
             cmd.add_argument("--suite", required=True)
             cmd.add_argument("--live", action="store_true")
@@ -192,6 +210,7 @@ def main(argv: list[str] | None = None) -> int:
                 diagnostic_judge_calls=args.diagnostic_budget,
                 author_review=args.author_review,
                 reviewed_at=datetime.fromisoformat(args.reviewed_at),
+                projection_version=args.projection_version,
             )
             _save(args.output, contract)
             return 0
@@ -290,7 +309,10 @@ def main(argv: list[str] | None = None) -> int:
                 preparation,
                 args.request_id,
                 source_loader=loader,
-                scorer_factory=lambda: make_judge(contract.evaluator.judge),
+                scorer_factory=lambda: make_judge(
+                    contract.evaluator.judge,
+                    projection_version=contract.rating.projection_version,
+                ),
                 store=store,
                 frozen_bundle=args.frozen,
             )
