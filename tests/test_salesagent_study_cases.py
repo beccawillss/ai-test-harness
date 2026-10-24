@@ -4,6 +4,7 @@ No target, HTTP client, semantic scorer or judge is constructed. These responses
 are test doubles, never captured study observations or evidence of target quality.
 """
 
+import json
 from copy import deepcopy
 from pathlib import Path
 
@@ -24,6 +25,33 @@ def definition():
         DIRECTORY / "dataset.json",
         [DIRECTORY / "suites" / f"{name}.json" for name in SUITES],
     )
+
+
+def p1_reviewed_cases():
+    """Reconstruct the five prior oracles; assert their original dataset identity.
+
+    Shared catalogue/grounding checks and every non-reference field are retained
+    from current cases. The pinned full hash detects any drift in that history.
+    This evaluator-only fixture never supplies live Study inputs.
+    """
+    history = json.loads(
+        (
+            Path(__file__).parent / "fixtures/salesagent_study/p1-reviewed-oracles.json"
+        ).read_text()
+    )
+    cases = [c.model_copy(deep=True) for c in definition().dataset.cases]
+    for c in cases:
+        if c.id in history:
+            shared = [
+                a
+                for a in c.reference["assertions"]
+                if a["id"].endswith(("-catalogue-facts", "-observed-products"))
+            ]
+            c.reference = {
+                "assertions": shared + history[c.id]["assertions"],
+                "semantic": history[c.id]["semantic"],
+            }
+    return cases
 
 
 @pytest.fixture(scope="module")

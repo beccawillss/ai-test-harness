@@ -1,5 +1,164 @@
 # Study v1 pre-freeze quality corrections
 
+## P2 commit and PR authorization and final verification
+
+The user reviewed the P2 handoff and authorized committing/pushing
+`feat/study-v1-p2-qa` and preparing a PR against `main`, after final verification.
+This supersedes the earlier implementation-stage commit/push restriction below.
+It does not approve formal candidate QA, warmth implementation, live evaluation,
+Study freeze or PR merge.
+
+A fresh fetch confirms current `origin/main` and the P2 branch base are both
+`b99c84d162fbb6f4750f1374c6cdae2a63c8d9ac` (merged P1 PR #16). No transfer,
+merge, rebase or implementation reconciliation was necessary. Complete review
+against this main confirms exactly nine changed/new files: five edited candidate
+references in one JSONL file, four Python test modules, two test-only fixtures,
+and two review/planning documents. All 144 other tracked files are byte-identical
+to current main. The original dirty checkout remains separately preserved.
+
+The final structural audit compares each edited reference with main: the five
+GRD capability assertions differ only by enumerating the six feature orders in
+existing whole-observation `matches_any`/`any` checks; ADV-005 keeps its shared
+and fabrication checks, replaces its null-only quote with the approved active
+promotion/catalogue-price alternatives and existing validated-discount rule,
+and clarifies only its semantic compromise/budget expectation. All 50 inputs,
+classifications and memberships and 45 full definition rows remain unchanged.
+
+The full dataset fingerprint remains
+`4db62cceec19881853a2d921e886edd4866cfef976b5c209bd06da486ec5e257`.
+All six suite-definition/selection hashes and counts match the candidate review
+record. Memberships and suite-definition bindings are unchanged; changed case
+content changes full/smoke/multi-turn/adversarial selected-case hashes only.
+The historical five-oracle fixture reconstructs the old P1 full fingerprint.
+No scorer/reference/projection/profile/rating version changes are introduced.
+
+Final pre-commit verification re-ran the entire offline suite: **2,119 passed
+in 70.09 seconds**, including all 152 P2 regressions and historical compatibility
+checks. The previous 808-test focused receipt remains applicable: test code,
+candidate definitions, fixtures, environment, source and evaluator bindings are
+unchanged. Ruff, mypy (40 source files), formatting of all four changed Python
+files, whitespace checks and the complete protected-file audit pass again.
+Repository-wide formatting reports exactly the same three pre-existing files:
+`docs/test-taxonomy-and-suites.md`, `src/harness/targets/base.py` and
+`tests/test_dataset.py`. Each was compared byte-for-byte with freshly fetched
+main and is unaffected. They are outside the PR scope.
+
+Only this authorization/verification note and the corresponding candidate-review
+handoff note were added after the approved implementation. No warmth or season
+work, unrelated cleanup, live target/judge execution, freeze or merge is included.
+The PR description carries the changed-file summary, verification evidence,
+historical compatibility, accepted limitations and the separately approved-or-
+accepted warmth follow-up required before freeze. Commit/PR preparation does
+not itself constitute formal approval of any of the 50 candidate cases.
+
+## Approved P2 corrections — 2026-10-24
+
+The user approved only feature-order equivalence in GRD-001/002/003/006 and
+grounded alternative quotes in ADV-005. Work starts from merged P1 main
+`b99c84d` in an isolated `feat/study-v1-p2-qa` worktree; the original dirty
+checkout is preserved. No commit, push, merge, live evaluation or freeze is
+part of this authorization.
+
+Design recorded before editing:
+
+- Replace the five capability patterns with existing `matches_any`/`any`
+  assertions enumerating all six permutations of each three-feature array.
+  Each alternative binds the original tool, successful result, product ID,
+  rating and complete feature list to one observation. No generic operator or
+  comparison-policy changes; duplicates, additions and missing facts stay invalid.
+- Replace ADV-005's unconditional null quote with explicit authoritative
+  catalogue-price alternatives and the existing critical `validated-discount-v1`
+  rule. Permit only the currently active WELCOME10/10% promotion or no offer.
+  Keep fabrication/card grounding gates. Clarify the existing semantic no-match
+  expectation: alternatives must disclose the £20/waterproof-jacket mismatch.
+- Snapshot the old five oracles in an evaluator-only historical test fixture;
+  preserve old full-case and scorer/prepared/configuration golden hashes.
+  Refresh current definition hashes without upgrading historical snapshots.
+- Document accepted trace/card requirements, STA-003 behavioral scope and season
+  deferral. Assess warmth read-only, with no warmth normalization/projection edit.
+
+Implementation complete; human review pending. Only five candidate references
+changed, with no production-code edits. The candidate review record contains
+before/after case and selected-suite hashes, accepted QA decisions, the read-only
+warmth proposal and formal human-review prerequisites.
+
+- [x] All six feature permutations pass in each of the four complete cases.
+  Wrong/missing/extra/duplicate features, wrong products/ratings/tools, split
+  observations and absent per-turn evidence cannot pass.
+- [x] All 17 authoritative catalogue products pass as explicitly described
+  alternative quotes from successful lookup or search observations. Refusal,
+  retail card/prose, validated offer without quote, prose-only alternative and
+  multiple consistent observations remain supported.
+- [x] Negative controls reject absent/failed/conflicting validation, invented
+  codes/products, wrong arguments, spoofed percentages/source prices, wrong
+  final prices, ungrounded cards and fabricated nominations. Missing/malformed
+  telemetry remains ERROR. A perfect fake semantic score cannot hide a critical
+  invalid quote. Budget-disclosure contrast pairs exercise the semantic gate.
+- [x] The historical oracle fixture reconstructs the original P1 full fingerprint
+  `bde063c5b1fcb845e3b18d6c489f26b72c549a700423b69122d37d8fd29d4bf9`.
+  Existing scorer v2 outcomes and semantic v2/v3 prepared/configuration golden
+  hashes pass. Capture schema/reference stay v3 and semantic/human projection
+  stays v4. The current capture scorer configuration remains
+  `b9227d6fb09556dc4f38b13ff0866539a12c0f286c975e6919ca6eefdaf97c10`.
+- [x] The current full fingerprint is
+  `4db62cceec19881853a2d921e886edd4866cfef976b5c209bd06da486ec5e257`.
+  Historical contracts verify with their old definitions and reject the new
+  dataset before any target is constructed. No archived bindings are upgraded.
+- [x] Identical responses under the four order-only edits produce identical
+  semantic v2/v3/v4 payloads; ADV-005's clarified expectation changes its new
+  payload under each projection. New case/source bindings identify all five
+  definition changes even where the projection content is unchanged.
+- [x] All 50 non-reference fields and 45 complete JSONL rows are unchanged.
+  Baseline SHA-256 audit confirms 144 other tracked files unchanged, including
+  all production code, preregistration, authoring specification, matrix,
+  descriptor, suites, rubric/threshold definitions and historical datasets.
+  Catalogue/promotions hashes were reconfirmed by reading their current files;
+  the test-only catalogue snapshot matches the recorded source byte hash.
+
+Verification uses the existing environment with `PYTHONPATH=src`, importing
+this isolated worktree. No live target or judge is constructed; the default
+pytest socket-blocking fixture remains active.
+
+| Check | Result |
+| --- | --- |
+| New P2 oracle regression module | 152 passed, 3.22 seconds |
+| Focused Study/semantic/calibration tests | 808 passed, 33.80 seconds |
+| Full offline pytest | 2,119 passed, 69.83 seconds |
+| Ruff over complete checkout | Passed |
+| Mypy over source | Passed, 40 source files |
+| Formatting of all four changed Python files | Passed |
+| Repository-wide formatting | Three inherited failures, detailed below; 120 files already formatted |
+| Diff whitespace and protected-file checks | Passed |
+
+Commands: `python -m pytest -q`; focused selection includes
+`test_salesagent_study_p2`, `test_salesagent_study_cases`,
+`test_salesagent_study_corrections`, `test_salesagent_study_quality`,
+`test_salesagent_study`, `test_salesagent_semantic`, `test_calibration_io` and
+`test_calibration_reporting`; `ruff check .`; `mypy src`;
+`ruff format --check .`; changed-Python-file `ruff format --check`;
+`git diff --check`.
+
+Repository-wide formatting reports `docs/test-taxonomy-and-suites.md`,
+`src/harness/targets/base.py` and `tests/test_dataset.py`. Each matches its
+pre-edit main SHA-256. They were left unchanged to preserve this slice's scope.
+
+Changed files: `datasets/salesagent/study-v1/cases.jsonl`, this plan, the candidate
+human-review record, three existing Study test modules, the new
+`tests/test_salesagent_study_p2.py`, and two test-only fixtures under
+`tests/fixtures/salesagent_study/` (historical oracles and catalogue snapshot).
+No warmth/season normalization, generic assertion change, evaluator version bump,
+live evaluation, dataset freeze, commit, push or merge was performed.
+The original checkout remains untouched. Changes await human review in
+`/private/tmp/ai-test-harness-study-v1-p2`, branch `feat/study-v1-p2-qa`.
+
+Remaining limitations: truthful compromise wording and prose-only fabrication
+require real semantic judgment; scripted judgments establish workflow only.
+The feature alternatives preserve the existing existential successful-observation
+requirement, rather than adding a new universal consistency rule. Current-turn
+quote validation rejects conflicting prices/promotions. Warmth remains a
+separate human acceptance/implementation decision; season expansion is deferred.
+No approval/freeze of any candidate is implied.
+
 ## Approved PR preparation from latest main
 
 The user reviewed the implementation handoff and approved the two P1 corrections
