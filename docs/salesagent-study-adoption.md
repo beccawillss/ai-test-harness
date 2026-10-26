@@ -1,5 +1,28 @@
 # Sales Agent Evaluation Study v1 integration
 
+## Current no-match capture contract
+
+The four corrected no-match references (CON-002/005 and RCV-003/004) require
+renewed human confirmation before freeze. The [acceptance policy and bindings](studies/sales-agent-evaluation-study-v1-authoring-review.md#current-no-match-correction-handoff--2026-10-26)
+record the bounded correction. New `capture_profile()` configurations use
+`salesagent-study-assertions-v4` / capture reference contract
+`salesagent-study-v1-references-v4`. A `no-match-search-v1` opt-in validates
+current-turn authoritative search coverage, complete catalogue-bound result
+sets and the absence of an eligible waterproof jacket. Narrowing activity,
+weather, colour, size, stock or unrelated feature filters cannot prove absence;
+complete broader searches may validly return nonempty results.
+
+The generic assertion engine, old scorer implementations, adapter/evidence,
+semantic scorer/profile (including its v3 reference contract), rubric, anchors,
+threshold and human rating contract are unchanged. Explicit
+`capture_profile(reference_contract=REFERENCE_CONTRACT)` reconstructs the old
+v3 capture configuration. Execution and source verification honor the recorded
+capture version; a v3 execution cannot accept a v4 rule. Changed case hashes
+require a separately reviewed new execution binding. The historical v3 capture
+description below remains applicable when that old configuration is selected.
+The original all-50 QA decisions precede these four reference edits; formal
+review-record adoption, renewed confirmation, freeze and execution are pending.
+
 The study has **50 authored candidates under human QA; it is not frozen or run**.
 Readiness Milestones 1–2 implement the prospective workflow and integration
 boundary. The subsequent candidate authoring and approved 2026-10-17 quality

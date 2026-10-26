@@ -12,7 +12,12 @@ from pathlib import Path
 
 import pytest
 from test_replay import settings
-from test_salesagent_study_cases import definition, p1_reviewed_cases, response
+from test_salesagent_study_cases import (
+    definition,
+    p1_reviewed_cases,
+    pre_no_match_cases,
+    response,
+)
 from test_salesagent_study_corrections import synchronize, tool
 
 from harness.core.case_fingerprints import hash_case_definition
@@ -433,6 +438,8 @@ def test_critical_invalid_quote_cannot_be_averaged_away(cases):
 
 
 def test_history_reconstruction_and_narrow_candidate_changes(cases):
+    # This historical P2 control retains the exact definitions it originally tested.
+    cases = {c.id: c for c in pre_no_match_cases()}
     old = p1_reviewed_cases()
     assert hash_cases(old, scheme="dataset-cases-v2") == (
         "bde063c5b1fcb845e3b18d6c489f26b72c549a700423b69122d37d8fd29d4bf9"
@@ -459,9 +466,11 @@ def test_history_reconstruction_and_narrow_candidate_changes(cases):
     r = alternative_quote(cases[previous.id])
     assert score(previous, r).passed is False
     assert score(cases[previous.id], r).passed is True
-    assert fingerprint(_scorer_snapshot(study.capture_profile()[0])) == (
-        "b9227d6fb09556dc4f38b13ff0866539a12c0f286c975e6919ca6eefdaf97c10"
-    )
+    assert fingerprint(
+        _scorer_snapshot(
+            study.capture_profile(reference_contract=study.REFERENCE_CONTRACT)[0]
+        )
+    ) == ("b9227d6fb09556dc4f38b13ff0866539a12c0f286c975e6919ca6eefdaf97c10")
     assert (
         len(
             {hash_case_definition(c, scheme="dataset-cases-v2") for c in cases.values()}

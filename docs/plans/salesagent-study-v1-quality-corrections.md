@@ -1,5 +1,17 @@
 # Study v1 pre-freeze quality corrections
 
+## Current follow-on: no-match search proofs — 2026-10-26
+
+The user authorized correction of the four reproducible no-match search
+weaknesses after human QA and the read-only readiness assessment. The bounded
+[no-match correction plan](salesagent-study-v1-no-match-oracles.md) records the
+acceptance policy, implementation, offline checks and renewed confirmation for
+SA-CON-002, SA-CON-005, SA-RCV-003 and SA-RCV-004. All other case definitions,
+methodology, memberships and semantic contracts remain protected. This work is
+isolated from the original dirty checkout and awaits implementation review;
+no actual Study freeze, live execution, commit, push or merge is authorized.
+The earlier milestone and authorization entries below remain historical.
+
 ## Warmth commit and PR authorization — final verification
 
 The user reviewed the warmth implementation handoff and authorized commit/push

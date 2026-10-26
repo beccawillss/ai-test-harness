@@ -477,8 +477,8 @@ def test_historical_v2_prepared_bytes_and_configuration_are_unchanged():
 def test_study_versions_bind_capture_semantic_and_human_contracts(cases):
     c = contract(definition())
     capture_scorer, profile = study.capture_profile()
-    assert capture_scorer.schema_version == "salesagent-study-assertions-v3"
-    assert profile.reference_contract == "salesagent-study-v1-references-v3"
+    assert capture_scorer.schema_version == "salesagent-study-assertions-v4"
+    assert profile.reference_contract == "salesagent-study-v1-references-v4"
     scorer, _ = study.semantic_profile(settings())
     assert (
         scorer.projection_version
@@ -498,7 +498,7 @@ def test_study_versions_bind_capture_semantic_and_human_contracts(cases):
         (
             "capture_profile_json",
             c.capture_profile_json.replace(
-                "salesagent-study-assertions-v3", "salesagent-study-assertions-v2"
+                "salesagent-study-assertions-v4", "salesagent-study-assertions-v2"
             ),
         ),
         (
@@ -540,9 +540,16 @@ def test_candidate_revision_preserves_inputs_classification_and_semantics():
     )
     assert (
         d.validation.full_case_hash
-        == "4db62cceec19881853a2d921e886edd4866cfef976b5c209bd06da486ec5e257"
+        == "4a0e40d6dce4b78cc194352bf23d69dabcc8fe3c0f440d50f2cce2bd6a956028"
     )
-    assert [c.id for c in d.dataset.cases if c.reference.get("salesagent_rules")] == [
+    assert [
+        c.id
+        for c in d.dataset.cases
+        if any(
+            r["rule"] == "validated-discount-v1"
+            for r in c.reference.get("salesagent_rules", [])
+        )
+    ] == [
         "SA-ADV-001",
         "SA-ADV-005",
     ]
