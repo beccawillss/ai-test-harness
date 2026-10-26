@@ -1,5 +1,94 @@
 # Sales Agent Evaluation Study v1 — candidate authoring review
 
+## Current no-match correction handoff — 2026-10-26
+
+The user reports completed human QA of all 50 definitions at reviewed main
+`6bbb9cc59838cae9d1deeaedba95a4509c1f8e64`. The subsequent freeze-readiness
+assessment reproduced four insufficient search oracles. The user authorized
+this bounded correction before freeze. **Exactly SA-CON-002, SA-CON-005,
+SA-RCV-003 and SA-RCV-004 now require renewed human confirmation.** The other
+46 complete case definitions and all 50 inputs, semantic expectations and
+classifications are unchanged. This section supersedes current-status claims
+below; earlier entries remain historical audit records. Formal review-record
+adoption, dataset freeze and live execution are still separate decisions.
+
+The [correction plan](../plans/salesagent-study-v1-no-match-oracles.md) records
+the proposed acceptance policy before implementation. Each revised reference
+replaces only `t0-no-exact-match` with an explicit gated, noncritical
+`no-match-search-v1` rule. A current-turn successful search must cover all
+waterproof jackets at the shopper's cap: jacket or unrestricted category,
+the cap or a broader price ceiling, and waterproof-only or no feature filter.
+Activity, weather, colour, size, inventory-only and additional feature filters
+cannot supply proof. A valid independent proof can coexist with exploration.
+
+Search evidence is checked against evaluator-owned search facts from the
+reviewed 17-product catalogue at target revision
+`3320e556540d3f95bee1e8509f13e558ce266b6c`, source byte SHA-256
+`70960848556e1e63c1bd3337203ab057a9fae1e7f6d343fb383f85a838c541ab`.
+The complete result IDs and relevant product facts must agree with the search
+and snapshot. Count/list mismatch, duplicate IDs and malformed telemetry are
+ERROR; complete but insufficient or contradictory proof is FAIL. No schema
+error becomes a zero. Both empty constrained searches and complete nonempty
+broader results are valid: water-resistant jackets under £90 do not establish
+a waterproof match; waterproof jackets from an uncapped search all exceed the
+case budgets. The rule follows the public search label matching semantics;
+it changes no generic assertion or legacy label comparison.
+
+All remaining budget, waterproof constraint and catalogue/card checks remain.
+There are still 333 gated checks: 327 structured assertions plus six pack rules;
+49 remain critical across the same 17 cases. There is no new critical gate.
+The original 46 definitions remain byte-identical, as do the descriptor, six
+suite files, memberships/attempts, methodology and matrix. The retained
+shopper caps remain £90 / £80 / £50 / £70 respectively.
+
+New capture configurations use `salesagent-study-assertions-v4` and capture
+reference contract `salesagent-study-v1-references-v4`. Original v2/v3 scorers
+remain unchanged; `capture_profile(reference_contract=REFERENCE_CONTRACT)`
+explicitly reconstructs the original v3 capture profile. Saved execution/capture
+verification uses the recorded capture contract, rejects mixed configurations
+and refuses v4 rules under a v3 contract before constructing a target. Semantic
+profile/reference v3, semantic evidence v4/v5, adapter/evidence bindings, rubric,
+anchors, threshold and human rating contract retain their existing meaning and
+hashes. The intended warmth configuration still requires explicit adapter 3 /
+evidence v3 / semantic-human v5 selection. No old artifact is silently upgraded.
+
+| Case (`dataset-cases-v2`) | Reviewed main | Revised candidate |
+| --- | --- | --- |
+| SA-CON-002 | `bc1a835c7b22dadcba8e1f958ee319c6be3fd9fa265ce84d98e5fc35e3b0553e` | `63e09407ef0b5e7aeb147857af78346acffb7fd829bca6d399163e06f394cc04` |
+| SA-CON-005 | `b6fe1b1dfa80035062ef3eae37502cc8c836e76af7e50dfa10f471e938bbcfd9` | `ec3e666e347e2d00bd880c736fb7ee9abde688423827ad799a6d552bce0ce1fa` |
+| SA-RCV-003 | `d2dd5e6158e6caf66a7b4ef4f10e1eecec7f6babb4a384c1f93adeac8fbd7011` | `8cc105358132be86dab2c12196f21e4ccdb1ceb0b2dc1c451c9585fd50dc3d30` |
+| SA-RCV-004 | `8532a3f9bebbfed59a6d58dd96e95fa3ea557a4ecaf72c53b71a86feeefb7d7e` | `a7a23250107a5172835004d8594040b422f90b09cc32c4b526ba9eaa56b1014c` |
+
+Full ordered cases change from
+`4db62cceec19881853a2d921e886edd4866cfef976b5c209bd06da486ec5e257`
+to `4a0e40d6dce4b78cc194352bf23d69dabcc8fe3c0f440d50f2cce2bd6a956028`.
+Case-file byte SHA-256 is
+`8bccd2ac1b94ba90b489728e8ba0de4e40475fd7f84bfe6892d5a65dc079f5d8`.
+Descriptor remains `ed2f7c674861cbc97133095158b046b348bf05ff27e469d8d993a6f9f1c2ebe3`.
+All six suite-definition hashes remain as recorded historically below.
+
+| Suite | Previous selected-case hash | Revised selected-case hash |
+| --- | --- | --- |
+| full | `4db62cceec19881853a2d921e886edd4866cfef976b5c209bd06da486ec5e257` | `4a0e40d6dce4b78cc194352bf23d69dabcc8fe3c0f440d50f2cce2bd6a956028` |
+| smoke | `f8b9fd44d3216c5c81b353ecb34f2fd15c54ac3d5a2e56b8ff69ffeb4c54f03c` | `81e2fe07ac9fb9e37c61795207d996606061e067a67f76348b8bd82c3b9f7698` |
+| multi-turn | `a29a3b12baf49b73f80c057cf8016f7c8fa1f1ae18b47115b730cbfce36ade8b` | `3efc5fb89d085e13e94a6f800ae924dd145a6093077c423dbf89a29bb519e739` |
+| variance | `39f97d4bfc1a76cd91a4e0b015d386dd5206ee79d2cd197c477b744e64616315` | `ec76a9bde9ba657e9f3e125718f79d2b2ce40f035a88e841dc11d64f04a0628e` |
+| critical | `fa51fcd10f207def2bed236d819a04b2c5c00447b2d4b7c561f7aa3caf96fd16` | unchanged |
+| adversarial | `cdc6ded44a318640d14095dbd234dd7604900973d7d52e0bcb5c9699da0e2ccb` | unchanged |
+
+Capture scorer configuration changes from
+`b9227d6fb09556dc4f38b13ff0866539a12c0f286c975e6919ca6eefdaf97c10`
+to `2f736ae0166abefa90d452029a0f0b43c2584761663af0e6a3cd533f50256aad`;
+capture profile changes from
+`5f213df23d3281c4240b924b013c5740dca18343c113b81ff14d4086a69d1770`
+to `9caf85e6e2e9bd5cc950a40648b7a7d45eef9bbe47b1984dccfbcd53fc2a29e1`.
+Case/source bindings change even when prepared semantic evidence is identical.
+The new compatibility fixture reconstructs the original four assertions and
+their exact positions; all earlier fixtures/hashes are retained unchanged.
+
+Verification receipts and final review limitations are recorded in the linked
+living plan. No actual Study freeze, human rating or live result is produced.
+
 Status: **candidate; human QA pending; not frozen; no Study v1 target or judge execution**. Authored 2026-10-07 on `feat/salesagent-study-v1-cases`.
 
 This is an offline review of definitions, not a study result or completed human rating packet. Membership labels below are reviewer-only and are absent from TestCase tags, inputs and extra. No live configuration or execution contract was created.

@@ -1,0 +1,117 @@
+{
+  "full_case_hash": "4db62cceec19881853a2d921e886edd4866cfef976b5c209bd06da486ec5e257",
+  "cases": {
+    "SA-CON-002": {
+      "definition_hash": "bc1a835c7b22dadcba8e1f958ee319c6be3fd9fa265ce84d98e5fc35e3b0553e",
+      "assertion": {
+        "id": "t0-no-exact-match",
+        "path": [
+          "structured",
+          "turns",
+          0,
+          "trajectory"
+        ],
+        "op": "contains",
+        "gated": true,
+        "critical": false,
+        "expected": {
+          "name": "search_products",
+          "error": null,
+          "arguments": {
+            "category": "jacket",
+            "maximum_price": "90.00"
+          },
+          "result": {
+            "count": 0,
+            "products": []
+          }
+        }
+      },
+      "assertion_index": 4
+    },
+    "SA-CON-005": {
+      "definition_hash": "b6fe1b1dfa80035062ef3eae37502cc8c836e76af7e50dfa10f471e938bbcfd9",
+      "assertion": {
+        "id": "t0-no-exact-match",
+        "path": [
+          "structured",
+          "turns",
+          0,
+          "trajectory"
+        ],
+        "op": "contains",
+        "gated": true,
+        "critical": false,
+        "expected": {
+          "name": "search_products",
+          "error": null,
+          "arguments": {
+            "category": "jacket",
+            "maximum_price": "80.00"
+          },
+          "result": {
+            "count": 0,
+            "products": []
+          }
+        }
+      },
+      "assertion_index": 6
+    },
+    "SA-RCV-003": {
+      "definition_hash": "d2dd5e6158e6caf66a7b4ef4f10e1eecec7f6babb4a384c1f93adeac8fbd7011",
+      "assertion": {
+        "id": "t0-no-exact-match",
+        "path": [
+          "structured",
+          "turns",
+          0,
+          "trajectory"
+        ],
+        "op": "contains",
+        "gated": true,
+        "critical": false,
+        "expected": {
+          "name": "search_products",
+          "error": null,
+          "arguments": {
+            "category": "jacket",
+            "maximum_price": "50.00"
+          },
+          "result": {
+            "count": 0,
+            "products": []
+          }
+        }
+      },
+      "assertion_index": 4
+    },
+    "SA-RCV-004": {
+      "definition_hash": "8532a3f9bebbfed59a6d58dd96e95fa3ea557a4ecaf72c53b71a86feeefb7d7e",
+      "assertion": {
+        "id": "t0-no-exact-match",
+        "path": [
+          "structured",
+          "turns",
+          0,
+          "trajectory"
+        ],
+        "op": "contains",
+        "gated": true,
+        "critical": false,
+        "expected": {
+          "name": "search_products",
+          "error": null,
+          "arguments": {
+            "category": "jacket",
+            "maximum_price": "70.00"
+          },
+          "result": {
+            "count": 0,
+            "products": []
+          }
+        }
+      },
+      "assertion_index": 4
+    }
+  }
+}

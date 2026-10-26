@@ -7,7 +7,13 @@ import pytest
 from test_replay import settings
 from test_salesagent_semantic import target_response
 from test_salesagent_study import prepared
-from test_salesagent_study_cases import definition, p1_reviewed_cases, product, response
+from test_salesagent_study_cases import (
+    definition,
+    p1_reviewed_cases,
+    pre_no_match_cases,
+    product,
+    response,
+)
 from test_salesagent_study_corrections import inventory_response, synchronize, tool
 
 from harness.core.fingerprints import fingerprint
@@ -110,7 +116,8 @@ def test_all_23_affected_candidates_accept_equivalent_labels(cases, cid):
     r = valid_response(case)
     new = study.capture_profile()[0]
     old = StudyAssertionsScorer(requires=study.CAPABILITIES)
-    assert new.score(case, r).passed and old.score(case, r).passed
+    old_case = next(c for c in pre_no_match_cases() if c.id == cid)
+    assert new.score(case, r).passed and old.score(old_case, r).passed
     for turn in r.structured["turns"]:
         c = turn["evidence"]["resolved_constraints"]
         c["features"] = [v.upper() for v in c["features"]]
@@ -126,7 +133,7 @@ def test_all_23_affected_candidates_accept_equivalent_labels(cases, cid):
     synchronize(r)
     before = case.model_dump_json(), r.model_dump_json()
     assert new.score(case, r).passed
-    assert old.score(case, r).passed is False
+    assert old.score(old_case, r).passed is False
     assert before == (case.model_dump_json(), r.model_dump_json())
 
 
@@ -794,12 +801,12 @@ def test_human_judge_v4_bindings_and_stale_versions_are_checked(tmp_path):
     for field, old, new in [
         (
             "capture_profile_json",
-            "salesagent-study-assertions-v3",
+            "salesagent-study-assertions-v4",
             "salesagent-study-assertions-v2",
         ),
         (
             "capture_profile_json",
-            "salesagent-study-v1-references-v3",
+            "salesagent-study-v1-references-v4",
             "salesagent-study-v1-references-v2",
         ),
         (
@@ -810,10 +817,10 @@ def test_human_judge_v4_bindings_and_stale_versions_are_checked(tmp_path):
     ]:
         payload = c.model_dump(mode="json")
         payload[field] = payload[field].replace(old, new)
-        with pytest.raises(ValueError, match="Execution evaluator"):
+        with pytest.raises(ValueError):
             study.StudyExecutionContract.model_validate_json(json.dumps(payload))
-    assert study.capture_profile()[0].schema_version == "salesagent-study-assertions-v3"
+    assert study.capture_profile()[0].schema_version == "salesagent-study-assertions-v4"
     assert (
         definition().validation.full_case_hash
-        == "4db62cceec19881853a2d921e886edd4866cfef976b5c209bd06da486ec5e257"
+        == "4a0e40d6dce4b78cc194352bf23d69dabcc8fe3c0f440d50f2cce2bd6a956028"
     )

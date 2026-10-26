@@ -27,6 +27,24 @@ def definition():
     )
 
 
+def pre_no_match_cases():
+    """Reconstruct the reviewed main definitions without changing archived hashes."""
+    history = json.loads(
+        (
+            Path(__file__).parent
+            / "fixtures/salesagent_study/pre-no-match-oracles.json"
+        ).read_text()
+    )["cases"]
+    cases = [c.model_copy(deep=True) for c in definition().dataset.cases]
+    for case in cases:
+        if case.id in history:
+            del case.reference["salesagent_rules"]
+            case.reference["assertions"].insert(
+                history[case.id]["assertion_index"], history[case.id]["assertion"]
+            )
+    return cases
+
+
 def p1_reviewed_cases():
     """Reconstruct the five prior oracles; assert their original dataset identity.
 
@@ -39,7 +57,7 @@ def p1_reviewed_cases():
             Path(__file__).parent / "fixtures/salesagent_study/p1-reviewed-oracles.json"
         ).read_text()
     )
-    cases = [c.model_copy(deep=True) for c in definition().dataset.cases]
+    cases = pre_no_match_cases()
     for c in cases:
         if c.id in history:
             shared = [
@@ -255,7 +273,7 @@ def test_no_match_accepts_grounded_alternative_but_rejects_relaxed_constraint(ca
             "arguments": {
                 "category": "jacket",
                 "maximum_price": "90.00",
-                "features": ["waterproof", "hooded"],
+                "features": ["waterproof"],
             },
             "result": {"count": 0, "products": []},
             "error": None,

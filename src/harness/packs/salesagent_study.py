@@ -62,6 +62,10 @@ from harness.core.suites import (
 from harness.judges.base import JudgeReply
 from harness.packs import salesagent_semantic as semantic
 from harness.packs.salesagent_rules import StudyLabelAssertionsScorer, validate_rules
+from harness.packs.salesagent_search import (
+    StudySearchAssertionsScorer,
+    validate_search_rules,
+)
 from harness.scorers.output_contracts import ScoreOutputContract
 from harness.scorers.rubric_judge import RubricJudgeScorer
 from harness.targets.salesagent import (
@@ -79,6 +83,7 @@ MATRIX_BYTES = "c0e15099ab3bccf54b7528a20d11fddbff71c5dccec89ab4ea9022a6ba9924b1
 CAPTURE_PROFILE = "salesagent-study-v1-capture"
 SEMANTIC_PROFILE = "salesagent-study-v1-semantic"
 REFERENCE_CONTRACT = "salesagent-study-v1-references-v3"
+SEARCH_REFERENCE_CONTRACT = "salesagent-study-v1-references-v4"
 CAPABILITIES = frozenset({"structured", "metadata", "trajectory"})
 ANCHORS = ScoreOutputContract(
     id="salesagent-semantic-anchors-v1", anchors=(0.0, 0.3, 0.6, 0.8, 1.0)
@@ -103,17 +108,24 @@ def _no_judge(_: str) -> str:
 
 
 def validate_reference(case: TestCase) -> None:
-    validate_rules(case)
+    validate_search_rules(case)
     semantic.semantic_expectations(case.reference)
 
 
-def capture_profile() -> tuple[StudyLabelAssertionsScorer, EvaluationProfile]:
-    scorer = StudyLabelAssertionsScorer(requires=CAPABILITIES)
+def capture_profile(
+    *, reference_contract: str = SEARCH_REFERENCE_CONTRACT
+) -> tuple[StudyLabelAssertionsScorer, EvaluationProfile]:
+    if reference_contract == REFERENCE_CONTRACT:
+        scorer = StudyLabelAssertionsScorer(requires=CAPABILITIES)
+    elif reference_contract == SEARCH_REFERENCE_CONTRACT:
+        scorer = StudySearchAssertionsScorer(requires=CAPABILITIES)
+    else:
+        raise ValueError("Unsupported Study capture reference contract")
     return scorer, EvaluationProfile(
         id=CAPTURE_PROFILE,
         taxonomy_evidence="excluded",
         scorer_configuration={scorer.name: _scorer_snapshot(scorer)},
-        reference_contract=REFERENCE_CONTRACT,
+        reference_contract=reference_contract,
         case_payload_snapshot="full",
         requires_full_payload=True,
         case_extra_keys=[],
@@ -528,7 +540,8 @@ class StudyExecutionContract(Frozen):
             or self.validation.matrix_hash != fingerprint(matrix)
         ):
             raise ValueError("Execution methodology/matrix differs")
-        _, capture = capture_profile()
+        reference = strict_json(self.capture_profile_json).get("reference_contract")
+        _, capture = capture_profile(reference_contract=reference)
         version = self.rating.projection_version
         evidence_version = evidence_version_for_projection(version)
         if (
@@ -617,6 +630,13 @@ def verify_contract(
     contract = StudyExecutionContract.model_validate_json(contract.model_dump_json())
     if validate_study(study.dataset, study.suites) != contract.validation:
         raise ValueError("Study no longer matches frozen execution contract")
+    if (
+        strict_json(contract.capture_profile_json)["reference_contract"]
+        == REFERENCE_CONTRACT
+    ):
+        for case in study.dataset.cases:
+            # v3 must reject v4 opt-ins before client construction.
+            validate_rules(case)
     return contract
 
 
@@ -678,7 +698,11 @@ def capture(
     except Exception:
         target.close()
         raise
-    scorer, profile = capture_profile()
+    scorer, profile = capture_profile(
+        reference_contract=strict_json(contract.capture_profile_json)[
+            "reference_contract"
+        ]
+    )
     # execute_suite/run own close-on-completion; source context was copied before calls.
     result = execute_suite(
         resolved,
@@ -734,7 +758,11 @@ def verify_capture(
         or [c.case_id for c in source.cases] != list(binding.case_ids)
     ):
         raise ValueError("Capture profile/dataset/selection differs")
-    expected_scorer, expected_profile = capture_profile()
+    expected_scorer, expected_profile = capture_profile(
+        reference_contract=strict_json(contract.capture_profile_json)[
+            "reference_contract"
+        ]
+    )
     _verify_v2_definitions(source, study.dataset.cases)
     selected = [case for case in study.dataset.cases if case.id in binding.case_ids]
     if source.dataset_hash != hash_cases(
@@ -746,7 +774,7 @@ def verify_capture(
     if (
         snapshot.get("evaluation_profile")
         != _profile_snapshot(expected_profile, [expected_scorer])
-        or snapshot.get("scorers") != [_scorer_snapshot(capture_profile()[0])]
+        or snapshot.get("scorers") != [_scorer_snapshot(expected_scorer)]
         or snapshot.get("attempts") != binding.attempts
         or snapshot.get("dataset_fingerprint_scheme") != "dataset-cases-v2"
         or snapshot.get("overrides") != {}

@@ -5,13 +5,14 @@ import json
 from copy import deepcopy
 from datetime import UTC, datetime
 from pathlib import Path
+from shutil import copyfile
 
 import httpx
 import pytest
 from test_replay import settings
 from test_salesagent_semantic import target_response
 from test_salesagent_study import target_freeze
-from test_salesagent_study_cases import definition, response
+from test_salesagent_study_cases import definition, pre_no_match_cases, response
 from test_salesagent_study_corrections import inventory_response, synchronize, tool
 from test_salesagent_study_p2 import CATALOGUE, observed_product
 from test_salesagent_target import FakeHTTP
@@ -438,7 +439,7 @@ def test_cases_and_attempts_keep_separate_warmth_trajectories(cases):
     assert b.structured["turns"][0]["trajectory"][0]["result"]["warmth"] == "high"
 
 
-def test_historical_prepared_configurations_and_execution_are_unchanged():
+def test_historical_prepared_configurations_and_execution_are_unchanged(tmp_path):
     expected = json.loads((FIXTURES / "pre-warmth-bindings.json").read_text())
     for version in [
         semantic.PROJECTION_VERSION,
@@ -464,7 +465,11 @@ def test_historical_prepared_configurations_and_execution_are_unchanged():
             == expected[version]["configuration"]
         )
     assert (
-        fingerprint(study.capture_profile()[1].model_dump(mode="json"))
+        fingerprint(
+            study.capture_profile(reference_contract=study.REFERENCE_CONTRACT)[
+                1
+            ].model_dump(mode="json")
+        )
         == expected["capture_profile"]
     )
     assert (
@@ -476,7 +481,22 @@ def test_historical_prepared_configurations_and_execution_are_unchanged():
         (FIXTURES / "pre-warmth-execution.json").read_text()
     )
     assert archived.digest == expected["execution"]
-    assert study.verify_contract(definition(), archived) == archived
+    # Reconstruct its original committed inputs; never rebind it to revised oracles.
+    d = definition()
+    (tmp_path / "suites").mkdir()
+    copyfile(d.dataset.descriptor_path, tmp_path / "dataset.json")
+    for suite in d.suites:
+        copyfile(suite.suite_path, tmp_path / "suites" / suite.suite_path.name)
+    (tmp_path / "cases.jsonl").write_text(
+        "\n".join(
+            canonical_json(c.model_dump(mode="json")) for c in pre_no_match_cases()
+        )
+        + "\n"
+    )
+    historical = study.load_study(
+        tmp_path / "dataset.json", list((tmp_path / "suites").glob("*.json"))
+    )
+    assert study.verify_contract(historical, archived) == archived
 
 
 @pytest.mark.parametrize("mode", ["lookup", "search"])
@@ -689,7 +709,7 @@ def test_real_candidate_v5_capture_preparation_store_and_blind_packet_agree(tmp_
     assert c.rating.digest != study.rating_contract().digest
     assert (
         d.validation.full_case_hash
-        == "4db62cceec19881853a2d921e886edd4866cfef976b5c209bd06da486ec5e257"
+        == "4a0e40d6dce4b78cc194352bf23d69dabcc8fe3c0f440d50f2cce2bd6a956028"
     )
 
 
