@@ -1,0 +1,693 @@
+{
+  "record_status": "human_approved_pending_repository_integration",
+  "verification_date": "2026-10-26",
+  "repository": "beccawillss/ai-test-harness",
+  "reviewed_merge_commit": "a36733b0db8279aee417789172f1ce16b4532839",
+  "original_reviewed_commit": "6bbb9cc59838cae9d1deeaedba95a4509c1f8e64",
+  "implementation_commit": "410f5511a95448613596d61acd832eddaffc8e9d",
+  "merge_tree": "3b3f5d19effadcc352ec5f1e6bd1734960254263",
+  "remote_tree_files_verified": 160,
+  "case_file": {
+    "path": "datasets/salesagent/study-v1/cases.jsonl",
+    "git_blob": "454c2c5fb5aab4cbc65c906e4e76cfa1ed454283",
+    "byte_sha256": "8bccd2ac1b94ba90b489728e8ba0de4e40475fd7f84bfe6892d5a65dc079f5d8",
+    "full_case_fingerprint": "4a0e40d6dce4b78cc194352bf23d69dabcc8fe3c0f440d50f2cce2bd6a956028",
+    "fingerprint_scheme": "dataset-cases-v2",
+    "case_count": 50,
+    "original_full_case_fingerprint": "4db62cceec19881853a2d921e886edd4866cfef976b5c209bd06da486ec5e257"
+  },
+  "descriptor": {
+    "path": "datasets/salesagent/study-v1/dataset.json",
+    "fingerprint": "ed2f7c674861cbc97133095158b046b348bf05ff27e469d8d993a6f9f1c2ebe3",
+    "byte_sha256": "ea6153f7a0f22499af4be75bb7c145af2c7307a92593d8aaf5aa6eccfb3803f6",
+    "byte_identical_to_original": true
+  },
+  "methodology": {
+    "path": "docs/studies/sales-agent-evaluation-study-v1-preregistration.md",
+    "byte_sha256": "5de0400bc3de7d910902d72b2d7199aab81d0b553e733faabfe0f4da91fa9ace",
+    "canonical_matrix_fingerprint": "30ea27e185e430f79d3210e8eeb4b93b40b2c70a098260c375ee79fca63165f0",
+    "matrix_byte_sha256": "c0e15099ab3bccf54b7528a20d11fddbff71c5dccec89ab4ea9022a6ba9924b1",
+    "authoring_spec_byte_sha256": "00416400c8fb9becbe957dfe521de27d983f7afadc3ed076989a084dcdc1a332"
+  },
+  "review_source": {
+    "filename": "Study_v1_Human_QA_Review_Record_PostMerge_Draft.md",
+    "byte_sha256": "3071d174ccf5283c801e95b21a47f90e34f0806d7a33c5ffaa59c6a29a1ac480",
+    "original_review_filename": "Study_v1_Human_QA_Review_Record_Draft.md",
+    "original_review_byte_sha256": "7b74646f4f4840bce1727e985a4fd6c1987c8b2ec476fd6a4e7e7e82c4927e4b",
+    "roster_exact_order_match": true,
+    "changed_review_rows": [
+      "SA-CON-002",
+      "SA-CON-005",
+      "SA-RCV-003",
+      "SA-RCV-004"
+    ]
+  },
+  "unchanged_case_count": 46,
+  "amended_case_ids": [
+    "SA-CON-002",
+    "SA-CON-005",
+    "SA-RCV-003",
+    "SA-RCV-004"
+  ],
+  "cases": [
+    {
+      "id": "SA-REC-001",
+      "definition_fingerprint": "b6326f6dda62bbbf99be9bdac1979b65648a7d74458adb09fc4a29e76dfd9182",
+      "original_definition_fingerprint": "b6326f6dda62bbbf99be9bdac1979b65648a7d74458adb09fc4a29e76dfd9182",
+      "byte_identical_to_original": true
+    },
+    {
+      "id": "SA-REC-002",
+      "definition_fingerprint": "db1cfa214ae30a72061b44d7f325d49391a444a3070785e72341eaf9c3403115",
+      "original_definition_fingerprint": "db1cfa214ae30a72061b44d7f325d49391a444a3070785e72341eaf9c3403115",
+      "byte_identical_to_original": true
+    },
+    {
+      "id": "SA-REC-003",
+      "definition_fingerprint": "dc25ccba4828460917e660b1722d09d975826a8da60aa5b8cf440c72fc17ca40",
+      "original_definition_fingerprint": "dc25ccba4828460917e660b1722d09d975826a8da60aa5b8cf440c72fc17ca40",
+      "byte_identical_to_original": true
+    },
+    {
+      "id": "SA-REC-004",
+      "definition_fingerprint": "f55180ef3a8917fa9c7eafbf1f14243438d2f7405134d05bfa1fbee42ce7e506",
+      "original_definition_fingerprint": "f55180ef3a8917fa9c7eafbf1f14243438d2f7405134d05bfa1fbee42ce7e506",
+      "byte_identical_to_original": true
+    },
+    {
+      "id": "SA-REC-005",
+      "definition_fingerprint": "78b60e01a2477f943088d5fa47944c33d985ac67e67cfd690814d4e63d9b85c7",
+      "original_definition_fingerprint": "78b60e01a2477f943088d5fa47944c33d985ac67e67cfd690814d4e63d9b85c7",
+      "byte_identical_to_original": true
+    },
+    {
+      "id": "SA-REC-006",
+      "definition_fingerprint": "b4e45f15e8d3874a846e1c0d3fa13c1fbfc5fd9b40acf8d8ef89226b441eed4a",
+      "original_definition_fingerprint": "b4e45f15e8d3874a846e1c0d3fa13c1fbfc5fd9b40acf8d8ef89226b441eed4a",
+      "byte_identical_to_original": true
+    },
+    {
+      "id": "SA-REC-007",
+      "definition_fingerprint": "b087362f65aa7fe9024b837a0b735fea9a59009d86724789dc6901ff5be6db66",
+      "original_definition_fingerprint": "b087362f65aa7fe9024b837a0b735fea9a59009d86724789dc6901ff5be6db66",
+      "byte_identical_to_original": true
+    },
+    {
+      "id": "SA-REC-008",
+      "definition_fingerprint": "ea9c1b14904d5c56c7635bb3f0d538078438e27f5ab4e131c361bcd2170c8e7a",
+      "original_definition_fingerprint": "ea9c1b14904d5c56c7635bb3f0d538078438e27f5ab4e131c361bcd2170c8e7a",
+      "byte_identical_to_original": true
+    },
+    {
+      "id": "SA-CON-001",
+      "definition_fingerprint": "5e4e4b98d50e98f8d237ec291f67d0abc82e36d91eff86e1de9f6367e2b90189",
+      "original_definition_fingerprint": "5e4e4b98d50e98f8d237ec291f67d0abc82e36d91eff86e1de9f6367e2b90189",
+      "byte_identical_to_original": true
+    },
+    {
+      "id": "SA-CON-002",
+      "definition_fingerprint": "63e09407ef0b5e7aeb147857af78346acffb7fd829bca6d399163e06f394cc04",
+      "original_definition_fingerprint": "bc1a835c7b22dadcba8e1f958ee319c6be3fd9fa265ce84d98e5fc35e3b0553e",
+      "byte_identical_to_original": false
+    },
+    {
+      "id": "SA-CON-003",
+      "definition_fingerprint": "4420fecf1ff2e223431f11991bc978cb390af14b359fbf0a4ae87eef9fb77601",
+      "original_definition_fingerprint": "4420fecf1ff2e223431f11991bc978cb390af14b359fbf0a4ae87eef9fb77601",
+      "byte_identical_to_original": true
+    },
+    {
+      "id": "SA-CON-004",
+      "definition_fingerprint": "f2789c474688d3195529f80685a000167dd9311def7d5dede4d64b8f1428d4a7",
+      "original_definition_fingerprint": "f2789c474688d3195529f80685a000167dd9311def7d5dede4d64b8f1428d4a7",
+      "byte_identical_to_original": true
+    },
+    {
+      "id": "SA-CON-005",
+      "definition_fingerprint": "ec3e666e347e2d00bd880c736fb7ee9abde688423827ad799a6d552bce0ce1fa",
+      "original_definition_fingerprint": "b6fe1b1dfa80035062ef3eae37502cc8c836e76af7e50dfa10f471e938bbcfd9",
+      "byte_identical_to_original": false
+    },
+    {
+      "id": "SA-CON-006",
+      "definition_fingerprint": "90eb9a7beb27d086441640d4facae4aca6d7b08b237723f911634dcbea13b4a9",
+      "original_definition_fingerprint": "90eb9a7beb27d086441640d4facae4aca6d7b08b237723f911634dcbea13b4a9",
+      "byte_identical_to_original": true
+    },
+    {
+      "id": "SA-CON-007",
+      "definition_fingerprint": "9e72539c9676e82b266102e3c67d1f5e0e6c76e7cd3b156c61124af42c74c521",
+      "original_definition_fingerprint": "9e72539c9676e82b266102e3c67d1f5e0e6c76e7cd3b156c61124af42c74c521",
+      "byte_identical_to_original": true
+    },
+    {
+      "id": "SA-INV-001",
+      "definition_fingerprint": "e28f7b88d72428088160fb0bf26a1f900402e97d3611ebd7add4893816d1d92d",
+      "original_definition_fingerprint": "e28f7b88d72428088160fb0bf26a1f900402e97d3611ebd7add4893816d1d92d",
+      "byte_identical_to_original": true
+    },
+    {
+      "id": "SA-INV-002",
+      "definition_fingerprint": "ed13c1f59c246afb98a6f5fcd496905f6a010ccd1fcf35ff54aeafb5cbf7dff7",
+      "original_definition_fingerprint": "ed13c1f59c246afb98a6f5fcd496905f6a010ccd1fcf35ff54aeafb5cbf7dff7",
+      "byte_identical_to_original": true
+    },
+    {
+      "id": "SA-INV-003",
+      "definition_fingerprint": "adcbdbc576a4d2773143ad0fc283dd516adc58cb3ae18462178b703849a5c34d",
+      "original_definition_fingerprint": "adcbdbc576a4d2773143ad0fc283dd516adc58cb3ae18462178b703849a5c34d",
+      "byte_identical_to_original": true
+    },
+    {
+      "id": "SA-INV-004",
+      "definition_fingerprint": "09ef505483d53778d2e60f83a600b8d5cabebed8cb55a0979880311f66f4731f",
+      "original_definition_fingerprint": "09ef505483d53778d2e60f83a600b8d5cabebed8cb55a0979880311f66f4731f",
+      "byte_identical_to_original": true
+    },
+    {
+      "id": "SA-INV-005",
+      "definition_fingerprint": "40ee4a32f64e329822588ff9f6e67b620871c5779ef272145cc1d9d94de06a34",
+      "original_definition_fingerprint": "40ee4a32f64e329822588ff9f6e67b620871c5779ef272145cc1d9d94de06a34",
+      "byte_identical_to_original": true
+    },
+    {
+      "id": "SA-INV-006",
+      "definition_fingerprint": "991f5dbec3f296d9c48b4d266a6abd31f701dd9c0c28b8b2740c1aaf19d33dbb",
+      "original_definition_fingerprint": "991f5dbec3f296d9c48b4d266a6abd31f701dd9c0c28b8b2740c1aaf19d33dbb",
+      "byte_identical_to_original": true
+    },
+    {
+      "id": "SA-PRC-001",
+      "definition_fingerprint": "9b7ffb5ed9a926c88b38021f5d45ddfee31d8cb204c947dfb0ff67c9845c24c4",
+      "original_definition_fingerprint": "9b7ffb5ed9a926c88b38021f5d45ddfee31d8cb204c947dfb0ff67c9845c24c4",
+      "byte_identical_to_original": true
+    },
+    {
+      "id": "SA-PRC-002",
+      "definition_fingerprint": "97dc64a0ec6a4e5c7ac03abe91af1d5098793cedd5a030d30d5babbd9f103a92",
+      "original_definition_fingerprint": "97dc64a0ec6a4e5c7ac03abe91af1d5098793cedd5a030d30d5babbd9f103a92",
+      "byte_identical_to_original": true
+    },
+    {
+      "id": "SA-PRC-003",
+      "definition_fingerprint": "69f7404e87c4738875f0aa6fa6deb8748555ae61319dc075139ca2841b76c349",
+      "original_definition_fingerprint": "69f7404e87c4738875f0aa6fa6deb8748555ae61319dc075139ca2841b76c349",
+      "byte_identical_to_original": true
+    },
+    {
+      "id": "SA-PRC-004",
+      "definition_fingerprint": "d035f7ecaa7de16767d4f18351e5fadc112b92ee4405590e43b74f27d3727320",
+      "original_definition_fingerprint": "d035f7ecaa7de16767d4f18351e5fadc112b92ee4405590e43b74f27d3727320",
+      "byte_identical_to_original": true
+    },
+    {
+      "id": "SA-PRC-005",
+      "definition_fingerprint": "e94fc601a40f5ec1baebb1722b6deb42041e152b13822f8f0b7e69e5876858b0",
+      "original_definition_fingerprint": "e94fc601a40f5ec1baebb1722b6deb42041e152b13822f8f0b7e69e5876858b0",
+      "byte_identical_to_original": true
+    },
+    {
+      "id": "SA-PRC-006",
+      "definition_fingerprint": "46af217f247b35f9118cdbdf50b108e28ec6c4d67594848937d84ea9f9c7fe19",
+      "original_definition_fingerprint": "46af217f247b35f9118cdbdf50b108e28ec6c4d67594848937d84ea9f9c7fe19",
+      "byte_identical_to_original": true
+    },
+    {
+      "id": "SA-PRC-007",
+      "definition_fingerprint": "f80054b5adb38ef9517b9f6f7f337d02d778462a6158c3476cf9259e51eb120f",
+      "original_definition_fingerprint": "f80054b5adb38ef9517b9f6f7f337d02d778462a6158c3476cf9259e51eb120f",
+      "byte_identical_to_original": true
+    },
+    {
+      "id": "SA-STA-001",
+      "definition_fingerprint": "c55e0c58bcbf5f4b1ac2a9bfc9bad0458dfdb5f6f842e65f42a98b6b1dace0b3",
+      "original_definition_fingerprint": "c55e0c58bcbf5f4b1ac2a9bfc9bad0458dfdb5f6f842e65f42a98b6b1dace0b3",
+      "byte_identical_to_original": true
+    },
+    {
+      "id": "SA-STA-002",
+      "definition_fingerprint": "d084785c47408d9f5a4803b5f2225057841ec1cd31983949283358800ce1040f",
+      "original_definition_fingerprint": "d084785c47408d9f5a4803b5f2225057841ec1cd31983949283358800ce1040f",
+      "byte_identical_to_original": true
+    },
+    {
+      "id": "SA-STA-003",
+      "definition_fingerprint": "3e44ec26e33a31aff92a9b669ff3dd695af5604ac72df9503f2cb7a70ed9e015",
+      "original_definition_fingerprint": "3e44ec26e33a31aff92a9b669ff3dd695af5604ac72df9503f2cb7a70ed9e015",
+      "byte_identical_to_original": true
+    },
+    {
+      "id": "SA-STA-004",
+      "definition_fingerprint": "63ffbdae060cfb0cad29d83d54c59ba60aff2974ff601ca9ff2b93ccf2f77847",
+      "original_definition_fingerprint": "63ffbdae060cfb0cad29d83d54c59ba60aff2974ff601ca9ff2b93ccf2f77847",
+      "byte_identical_to_original": true
+    },
+    {
+      "id": "SA-STA-005",
+      "definition_fingerprint": "dea070431386b0a1bdcf0c837d44820f2f5836bb69b8982e4f66f8bae8ac419c",
+      "original_definition_fingerprint": "dea070431386b0a1bdcf0c837d44820f2f5836bb69b8982e4f66f8bae8ac419c",
+      "byte_identical_to_original": true
+    },
+    {
+      "id": "SA-STA-006",
+      "definition_fingerprint": "1140e6abfc3fb66103bd1f8e36c2ba5ad3461163ea3e74ac04173bf79a64154e",
+      "original_definition_fingerprint": "1140e6abfc3fb66103bd1f8e36c2ba5ad3461163ea3e74ac04173bf79a64154e",
+      "byte_identical_to_original": true
+    },
+    {
+      "id": "SA-GRD-001",
+      "definition_fingerprint": "cbbca861aa67187491518fd7dd59d8ccf4b0d56f29db5a6e65208cac08a6c1e5",
+      "original_definition_fingerprint": "cbbca861aa67187491518fd7dd59d8ccf4b0d56f29db5a6e65208cac08a6c1e5",
+      "byte_identical_to_original": true
+    },
+    {
+      "id": "SA-GRD-002",
+      "definition_fingerprint": "112ab412231550d45113d089b43166d51ce810022e8af28c24125beb3b41c0a2",
+      "original_definition_fingerprint": "112ab412231550d45113d089b43166d51ce810022e8af28c24125beb3b41c0a2",
+      "byte_identical_to_original": true
+    },
+    {
+      "id": "SA-GRD-003",
+      "definition_fingerprint": "7a74ad20d4de32152f81c83d6fca98527632cc80b4f4b6c3dd6c64a90a091471",
+      "original_definition_fingerprint": "7a74ad20d4de32152f81c83d6fca98527632cc80b4f4b6c3dd6c64a90a091471",
+      "byte_identical_to_original": true
+    },
+    {
+      "id": "SA-GRD-004",
+      "definition_fingerprint": "a3741197f1bba0d53f0ab72a9c9fa56d40d7762c3b883610fae7886b9e482b2a",
+      "original_definition_fingerprint": "a3741197f1bba0d53f0ab72a9c9fa56d40d7762c3b883610fae7886b9e482b2a",
+      "byte_identical_to_original": true
+    },
+    {
+      "id": "SA-GRD-005",
+      "definition_fingerprint": "5abd8981bab77871a4a97fcbe45a946bcf32588eaa9b00e3fe4e4a3e4746df1c",
+      "original_definition_fingerprint": "5abd8981bab77871a4a97fcbe45a946bcf32588eaa9b00e3fe4e4a3e4746df1c",
+      "byte_identical_to_original": true
+    },
+    {
+      "id": "SA-GRD-006",
+      "definition_fingerprint": "29ac814338266ba95bfec0bd54526b941fd6e52feb08bceecf0f0bdc402595b8",
+      "original_definition_fingerprint": "29ac814338266ba95bfec0bd54526b941fd6e52feb08bceecf0f0bdc402595b8",
+      "byte_identical_to_original": true
+    },
+    {
+      "id": "SA-RCV-001",
+      "definition_fingerprint": "2331161c90d15637c3091877f9efbec06f98f839b05ab49fb89468addd513bac",
+      "original_definition_fingerprint": "2331161c90d15637c3091877f9efbec06f98f839b05ab49fb89468addd513bac",
+      "byte_identical_to_original": true
+    },
+    {
+      "id": "SA-RCV-002",
+      "definition_fingerprint": "f8a0aeae88763d7fba3f557d959a60542d0c997b2bbfd735658e27b8ece71a32",
+      "original_definition_fingerprint": "f8a0aeae88763d7fba3f557d959a60542d0c997b2bbfd735658e27b8ece71a32",
+      "byte_identical_to_original": true
+    },
+    {
+      "id": "SA-RCV-003",
+      "definition_fingerprint": "8cc105358132be86dab2c12196f21e4ccdb1ceb0b2dc1c451c9585fd50dc3d30",
+      "original_definition_fingerprint": "d2dd5e6158e6caf66a7b4ef4f10e1eecec7f6babb4a384c1f93adeac8fbd7011",
+      "byte_identical_to_original": false
+    },
+    {
+      "id": "SA-RCV-004",
+      "definition_fingerprint": "a7a23250107a5172835004d8594040b422f90b09cc32c4b526ba9eaa56b1014c",
+      "original_definition_fingerprint": "8532a3f9bebbfed59a6d58dd96e95fa3ea557a4ecaf72c53b71a86feeefb7d7e",
+      "byte_identical_to_original": false
+    },
+    {
+      "id": "SA-RCV-005",
+      "definition_fingerprint": "7e229cdf44e6dac042d9c4d6200e2b97686367ff5cafed5404d64f7969f0999e",
+      "original_definition_fingerprint": "7e229cdf44e6dac042d9c4d6200e2b97686367ff5cafed5404d64f7969f0999e",
+      "byte_identical_to_original": true
+    },
+    {
+      "id": "SA-ADV-001",
+      "definition_fingerprint": "843dd2a920bac909b04d6fb53f5c84431c45eb51ea910bf72a1eaeaec1f39c3c",
+      "original_definition_fingerprint": "843dd2a920bac909b04d6fb53f5c84431c45eb51ea910bf72a1eaeaec1f39c3c",
+      "byte_identical_to_original": true
+    },
+    {
+      "id": "SA-ADV-002",
+      "definition_fingerprint": "397df639c6d7c3f582f25aed956891185ea391ee776e6047de602d37782ee8b0",
+      "original_definition_fingerprint": "397df639c6d7c3f582f25aed956891185ea391ee776e6047de602d37782ee8b0",
+      "byte_identical_to_original": true
+    },
+    {
+      "id": "SA-ADV-003",
+      "definition_fingerprint": "c2c85108eb6ea1f87508b28bc56fe0431f942cfd1ab671db1a88491605edaa4f",
+      "original_definition_fingerprint": "c2c85108eb6ea1f87508b28bc56fe0431f942cfd1ab671db1a88491605edaa4f",
+      "byte_identical_to_original": true
+    },
+    {
+      "id": "SA-ADV-004",
+      "definition_fingerprint": "a0f9245d39abeb9f406659d07cf1db191ddbc9698ccc04e300d3d92da037e245",
+      "original_definition_fingerprint": "a0f9245d39abeb9f406659d07cf1db191ddbc9698ccc04e300d3d92da037e245",
+      "byte_identical_to_original": true
+    },
+    {
+      "id": "SA-ADV-005",
+      "definition_fingerprint": "e23ba35208e70cd9c0296351ebb6917775df8b2441e745c47cf4db9ca743bc04",
+      "original_definition_fingerprint": "e23ba35208e70cd9c0296351ebb6917775df8b2441e745c47cf4db9ca743bc04",
+      "byte_identical_to_original": true
+    }
+  ],
+  "suites": [
+    {
+      "id": "adversarial",
+      "path": "datasets/salesagent/study-v1/suites/adversarial.json",
+      "suite_fingerprint": "4c36b222f9a730ee5be634a3835f3ba63562d894181416de6f864f0c74e4324c",
+      "selected_case_fingerprint": "cdc6ded44a318640d14095dbd234dd7604900973d7d52e0bcb5c9699da0e2ccb",
+      "selection": {
+        "tags_all": [
+          "difficulty:adversarial"
+        ]
+      },
+      "case_ids": [
+        "SA-PRC-005",
+        "SA-PRC-006",
+        "SA-GRD-006",
+        "SA-ADV-001",
+        "SA-ADV-002",
+        "SA-ADV-003",
+        "SA-ADV-004",
+        "SA-ADV-005"
+      ],
+      "attempts": 1,
+      "target_calls": 8,
+      "max_http_requests": 24,
+      "byte_identical_to_original": true
+    },
+    {
+      "id": "critical",
+      "path": "datasets/salesagent/study-v1/suites/critical.json",
+      "suite_fingerprint": "043a7f26ec613405d4c37a7d2e2bf48190d1721107353b455d8189c9d7532174",
+      "selected_case_fingerprint": "fa51fcd10f207def2bed236d819a04b2c5c00447b2d4b7c561f7aa3caf96fd16",
+      "selection": {
+        "risks": [
+          "critical"
+        ]
+      },
+      "case_ids": [
+        "SA-INV-002",
+        "SA-INV-006",
+        "SA-PRC-001",
+        "SA-PRC-004",
+        "SA-PRC-005",
+        "SA-PRC-006",
+        "SA-PRC-007",
+        "SA-GRD-005",
+        "SA-ADV-001",
+        "SA-ADV-002",
+        "SA-ADV-003",
+        "SA-ADV-004"
+      ],
+      "attempts": 1,
+      "target_calls": 12,
+      "max_http_requests": 36,
+      "byte_identical_to_original": true
+    },
+    {
+      "id": "full",
+      "path": "datasets/salesagent/study-v1/suites/full.json",
+      "suite_fingerprint": "091374222632fa422f3e7678a0086af3bbe47fe77012156a5d9aafa44577b083",
+      "selected_case_fingerprint": "4a0e40d6dce4b78cc194352bf23d69dabcc8fe3c0f440d50f2cce2bd6a956028",
+      "selection": {},
+      "case_ids": [
+        "SA-REC-001",
+        "SA-REC-002",
+        "SA-REC-003",
+        "SA-REC-004",
+        "SA-REC-005",
+        "SA-REC-006",
+        "SA-REC-007",
+        "SA-REC-008",
+        "SA-CON-001",
+        "SA-CON-002",
+        "SA-CON-003",
+        "SA-CON-004",
+        "SA-CON-005",
+        "SA-CON-006",
+        "SA-CON-007",
+        "SA-INV-001",
+        "SA-INV-002",
+        "SA-INV-003",
+        "SA-INV-004",
+        "SA-INV-005",
+        "SA-INV-006",
+        "SA-PRC-001",
+        "SA-PRC-002",
+        "SA-PRC-003",
+        "SA-PRC-004",
+        "SA-PRC-005",
+        "SA-PRC-006",
+        "SA-PRC-007",
+        "SA-STA-001",
+        "SA-STA-002",
+        "SA-STA-003",
+        "SA-STA-004",
+        "SA-STA-005",
+        "SA-STA-006",
+        "SA-GRD-001",
+        "SA-GRD-002",
+        "SA-GRD-003",
+        "SA-GRD-004",
+        "SA-GRD-005",
+        "SA-GRD-006",
+        "SA-RCV-001",
+        "SA-RCV-002",
+        "SA-RCV-003",
+        "SA-RCV-004",
+        "SA-RCV-005",
+        "SA-ADV-001",
+        "SA-ADV-002",
+        "SA-ADV-003",
+        "SA-ADV-004",
+        "SA-ADV-005"
+      ],
+      "attempts": 1,
+      "target_calls": 50,
+      "max_http_requests": 142,
+      "byte_identical_to_original": true
+    },
+    {
+      "id": "multi-turn",
+      "path": "datasets/salesagent/study-v1/suites/multi-turn.json",
+      "suite_fingerprint": "20f5576616adae7371dcd21984af8888ecbf49725479b0543dde2cb9cad06a98",
+      "selected_case_fingerprint": "3efc5fb89d085e13e94a6f800ae924dd145a6093077c423dbf89a29bb519e739",
+      "selection": {
+        "tags_all": [
+          "journey:multi-turn"
+        ]
+      },
+      "case_ids": [
+        "SA-REC-008",
+        "SA-CON-004",
+        "SA-CON-005",
+        "SA-CON-007",
+        "SA-INV-003",
+        "SA-PRC-001",
+        "SA-PRC-006",
+        "SA-PRC-007",
+        "SA-STA-001",
+        "SA-STA-002",
+        "SA-STA-003",
+        "SA-STA-004",
+        "SA-STA-005",
+        "SA-STA-006",
+        "SA-GRD-006",
+        "SA-RCV-001",
+        "SA-RCV-002",
+        "SA-RCV-005",
+        "SA-ADV-003",
+        "SA-ADV-004"
+      ],
+      "attempts": 1,
+      "target_calls": 20,
+      "max_http_requests": 82,
+      "byte_identical_to_original": true
+    },
+    {
+      "id": "smoke",
+      "path": "datasets/salesagent/study-v1/suites/smoke.json",
+      "suite_fingerprint": "96b5e5ee5bf2ea2bd3db545be32c79398c74b4bbbc9c8fb79f9bbbac39070031",
+      "selected_case_fingerprint": "81e2fe07ac9fb9e37c61795207d996606061e067a67f76348b8bd82c3b9f7698",
+      "selection": {
+        "case_ids": [
+          "SA-REC-002",
+          "SA-CON-003",
+          "SA-INV-001",
+          "SA-PRC-004",
+          "SA-STA-004",
+          "SA-GRD-001",
+          "SA-RCV-004",
+          "SA-ADV-002"
+        ]
+      },
+      "case_ids": [
+        "SA-REC-002",
+        "SA-CON-003",
+        "SA-INV-001",
+        "SA-PRC-004",
+        "SA-STA-004",
+        "SA-GRD-001",
+        "SA-RCV-004",
+        "SA-ADV-002"
+      ],
+      "attempts": 1,
+      "target_calls": 8,
+      "max_http_requests": 18,
+      "byte_identical_to_original": true
+    },
+    {
+      "id": "variance",
+      "path": "datasets/salesagent/study-v1/suites/variance.json",
+      "suite_fingerprint": "62fbebc19cffe43f1687dd05819abfe7092aded0c6ad79588ef760787ed379ba",
+      "selected_case_fingerprint": "ec76a9bde9ba657e9f3e125718f79d2b2ce40f035a88e841dc11d64f04a0628e",
+      "selection": {
+        "case_ids": [
+          "SA-REC-007",
+          "SA-REC-008",
+          "SA-CON-005",
+          "SA-CON-007",
+          "SA-INV-003",
+          "SA-PRC-006",
+          "SA-STA-004",
+          "SA-RCV-002",
+          "SA-RCV-005",
+          "SA-ADV-002"
+        ]
+      },
+      "case_ids": [
+        "SA-REC-007",
+        "SA-REC-008",
+        "SA-CON-005",
+        "SA-CON-007",
+        "SA-INV-003",
+        "SA-PRC-006",
+        "SA-STA-004",
+        "SA-RCV-002",
+        "SA-RCV-005",
+        "SA-ADV-002"
+      ],
+      "attempts": 3,
+      "target_calls": 30,
+      "max_http_requests": 108,
+      "byte_identical_to_original": true
+    }
+  ],
+  "human_case_ids": [
+    "SA-REC-001",
+    "SA-REC-004",
+    "SA-CON-002",
+    "SA-CON-006",
+    "SA-INV-002",
+    "SA-PRC-001",
+    "SA-PRC-007",
+    "SA-STA-003",
+    "SA-GRD-003",
+    "SA-GRD-006",
+    "SA-RCV-003",
+    "SA-ADV-004"
+  ],
+  "totals": {
+    "category": {
+      "business-rule-resistance": 5,
+      "constraint-handling": 7,
+      "conversation-state": 6,
+      "grounding-factuality": 6,
+      "inventory-variants": 6,
+      "promotions-pricing": 7,
+      "recommendation-quality": 8,
+      "recovery-ambiguity": 5
+    },
+    "difficulty": {
+      "adversarial": 8,
+      "ambiguous": 5,
+      "boundary": 19,
+      "normal": 18
+    },
+    "journey": {
+      "multi-turn": 20,
+      "single-turn": 30
+    },
+    "risk": {
+      "critical": 12,
+      "high": 18,
+      "low": 5,
+      "medium": 15
+    }
+  },
+  "capture": {
+    "scorer_version": "salesagent-study-assertions-v4",
+    "reference_contract": "salesagent-study-v1-references-v4",
+    "scorer_fingerprint": "2f736ae0166abefa90d452029a0f0b43c2584761663af0e6a3cd533f50256aad",
+    "profile_fingerprint": "9caf85e6e2e9bd5cc950a40648b7a7d45eef9bbe47b1984dccfbcd53fc2a29e1"
+  },
+  "validation_commands": {
+    "validate": "PASS",
+    "preview": "PASS"
+  },
+  "fresh_offline_tests": {
+    "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src python -B -m pytest -q -p no:cacheprovider",
+    "commit": "a36733b0db8279aee417789172f1ce16b4532839",
+    "status": "PASS",
+    "passed": 2438,
+    "seconds": 118.04,
+    "network_blocking": true,
+    "actual_study_freeze_or_live_calls": false
+  },
+  "authorization": {
+    "formal_reviewer_signoff": "confirmed_in_chat_noncryptographic",
+    "repository_integration": "proposed_uncommitted_draft_only",
+    "dataset_freeze": false,
+    "target_evaluator_freeze": false,
+    "live_calls": false,
+    "commit_push_merge": false,
+    "no_prior_study_v1_live_output_or_judge_exposure_confirmed": true
+  },
+  "local_fixture_check": {
+    "status": "PASS",
+    "deployment_attestation": false,
+    "source_revision": "3320e556540d3f95bee1e8509f13e558ce266b6c",
+    "byte_sha256": {
+      "data/products.json": "70960848556e1e63c1bd3337203ab057a9fae1e7f6d343fb383f85a838c541ab",
+      "data/discounts.json": "3147b6863b9458c928459cbb824d01b0e3b73aa2c5da2979debb78de4e1caf0c"
+    }
+  },
+  "original_to_final_changed_files": [
+    "datasets/salesagent/study-v1/cases.jsonl",
+    "docs/plans/salesagent-study-v1-no-match-oracles.md",
+    "docs/plans/salesagent-study-v1-quality-corrections.md",
+    "docs/salesagent-study-adoption.md",
+    "docs/studies/sales-agent-evaluation-study-v1-authoring-review.md",
+    "src/harness/packs/salesagent_search.py",
+    "src/harness/packs/salesagent_study.py",
+    "tests/fixtures/salesagent_study/pre-no-match-oracles.json",
+    "tests/test_salesagent_no_match.py",
+    "tests/test_salesagent_study_cases.py",
+    "tests/test_salesagent_study_corrections.py",
+    "tests/test_salesagent_study_p2.py",
+    "tests/test_salesagent_study_quality.py",
+    "tests/test_salesagent_warmth.py"
+  ],
+  "protected_existing_main_files_unchanged": 146,
+  "case_decision_dates": {
+    "original": "2026-10-24",
+    "no_match_renewal": "2026-10-26"
+  },
+  "reviewer_identifier": "beccawillss",
+  "formal_record_approval_at": "2026-10-28T19:22:14+00:00",
+  "formal_record_approval_reference": "ChatGPT reviewer approval of contents 2026-10-26 and reviewer identity/no-exposure confirmation 2026-10-28 (noncryptographic, no stable message ID)",
+  "approval_provenance": {
+    "content_approval_date": "2026-10-26",
+    "reviewer_confirmation_date": "2026-10-28",
+    "signoff_completion_recorded_at": "2026-10-28T19:22:14+00:00",
+    "timestamp_meaning": "Time the recorded sign-off was completed, not a claimed exact message timestamp",
+    "reviewer_identifier_selected_by_user": true,
+    "no_study_v1_live_responses_or_semantic_judge_results_inspected": true,
+    "confirmation_source": "Explicit user statements in the ChatGPT conversation; no cryptographic signature",
+    "approved_dataset_commit": "a36733b0db8279aee417789172f1ce16b4532839",
+    "approved_dataset_fingerprint": "4a0e40d6dce4b78cc194352bf23d69dabcc8fe3c0f440d50f2cce2bd6a956028"
+  },
+  "approved_review_record_path": "docs/studies/sales-agent-evaluation-study-v1-human-qa-review.md"
+}
