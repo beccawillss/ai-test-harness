@@ -59,6 +59,8 @@ class CanaryStore:
         if parent.st_uid != os.getuid() or parent.st_mode & 0o077:
             raise CanaryError("Canary namespace must be private and owner-controlled")
         self.path.mkdir(mode=0o700)  # Exclusive run identity; no implicit restart.
+        identity = self.path.stat()
+        self._directory_identity = (identity.st_dev, identity.st_ino)
         self.write(
             "manifest",
             {
@@ -94,6 +96,7 @@ class CanaryStore:
         if not re.fullmatch(r"[A-Za-z0-9_-]+", name):
             raise CanaryError("Invalid canary artifact name")
         try:
+            self.check_private()
             fd = os.open(
                 self.path / f"{name}.json",
                 os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
@@ -123,6 +126,8 @@ class CanaryStore:
             "provider_failure",
             "transport_ambiguous",
             "spending_or_usage_pause",
+            "operator_pause",
+            "operator_stop",
         }:
             raise CanaryError("Unknown canary stop category")
         self.stopped = True
@@ -133,14 +138,42 @@ class CanaryStore:
             )
 
     def guard(self, *, allow_unknown: bool = False) -> None:
+        self.check_private()
         if self.stopped or (self.path / "stopped.json").exists():
             raise CanaryError("Canary has stopped")
+        for action in ("pause", "stop"):
+            if (self.path / f"operator-{action}.json").exists():
+                self.stop("operator_" + action)
+                raise CanaryError("Operator stopped dispatch; human review required")
         summary = self.accounting()
         if Decimal(summary["estimated_subtotal_usd"]) >= Decimal(5) or (
             summary["unknown_attempts"] and not allow_unknown
         ):
             self.stop("spending_or_usage_pause")
             raise CanaryError("Canary paused for spending or unknown usage review")
+
+    def check_private(self) -> None:
+        """Fail closed if the owner changes storage identity or permissions."""
+        try:
+            for path in (self.path, *self.path.parents):
+                if path.is_symlink():
+                    raise ValueError
+            identity = self.path.stat()
+            if (identity.st_dev, identity.st_ino) != self._directory_identity:
+                raise ValueError
+            for path in (self.path.parent, self.path, *self.path.iterdir()):
+                info = path.lstat()
+                if (
+                    path.is_symlink()
+                    or info.st_uid != os.getuid()
+                    or info.st_mode & 0o077
+                ):
+                    raise ValueError
+        except Exception:  # noqa: BLE001 - unsafe storage cannot authorise dispatch
+            self.stopped = True
+            raise CanaryError(
+                "Canary storage identity or private permissions changed"
+            ) from None
 
     def accounting(self) -> dict[str, Any]:
         subtotal = Decimal(0)

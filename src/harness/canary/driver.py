@@ -10,6 +10,7 @@ from urllib.parse import quote
 
 import httpx
 
+from harness.canary.controller import LoopbackTransport
 from harness.canary.inputs import (
     ANCHORS,
     JUDGE_MODEL,
@@ -333,10 +334,19 @@ class CanaryDriver:
         self.store.guard()
         if not isinstance(transport, httpx.BaseTransport):
             raise CanaryError("An explicit target transport is required")
-        if self.store.mode == "offline" and not isinstance(
-            transport, httpx.MockTransport
+        if (
+            isinstance(transport, LoopbackTransport)
+            and transport.store is not self.store
         ):
-            raise CanaryError("Offline target I/O requires an explicit mock transport")
+            raise CanaryError(
+                "Worker and driver must share the same exclusive canary store"
+            )
+        if self.store.mode == "offline" and not isinstance(
+            transport, (httpx.MockTransport, LoopbackTransport)
+        ):
+            raise CanaryError(
+                "Offline target I/O requires mock or literal local worker transport"
+            )
         url = httpx.URL(base_url)
         if (
             url.scheme != "http"
