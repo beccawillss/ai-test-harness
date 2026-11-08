@@ -12,6 +12,7 @@ from urllib.parse import quote
 import httpx
 from pydantic import ValidationError
 
+from harness.core.execution_control import ExecutionControlError
 from harness.core.models import TargetResponse, TestCase, ToolCall
 from harness.targets._salesagent_contract import (
     ARGUMENTS,
@@ -24,6 +25,7 @@ from harness.targets._salesagent_contract import (
     ToolResult,
     Trace,
 )
+from harness.targets.salesagent_recording import SalesAgentRecorder
 
 EVIDENCE_VERSION = "salesagent-evidence-v2"
 ADAPTER_VERSION = "2"
@@ -121,7 +123,9 @@ class SalesAgentTarget:
         read_timeout: float = 120,
         write_timeout: float = 10,
         pool_timeout: float = 5,
+        recorder: SalesAgentRecorder | None = None,
     ) -> None:
+        self.recorder = recorder
         self.adapter_version = adapter_version_for(evidence_version)
         self.evidence_version = evidence_version
         try:
@@ -221,6 +225,22 @@ class SalesAgentTarget:
                 if chat.trace_id in seen or chat.trace_id in {".", ".."}:
                     raise SalesAgentError("trace inconsistency")
                 seen.add(chat.trace_id)
+                if self.recorder is not None:
+                    self.recorder.record(
+                        index,
+                        "chat",
+                        chat.model_dump(
+                            mode="json",
+                            include={
+                                "session_id",
+                                "trace_id",
+                                "message",
+                                "recommendations",
+                                "promotion",
+                                "pricing",
+                            },
+                        ),
+                    )
                 phase = "trace"
                 trace = Trace.model_validate(
                     self._request(
@@ -316,6 +336,14 @@ class SalesAgentTarget:
                         },
                     }
                 )
+                if self.recorder is not None:
+                    self.recorder.record(index, "turn", turns[-1])
+            except ExecutionControlError:
+                if self.recorder is not None:
+                    raise
+                raise SalesAgentError(
+                    f"turn {index + 1} {phase}: adapter execution unavailable"
+                ) from None
             except SalesAgentError as exc:
                 raise SalesAgentError(f"turn {index + 1} {phase}: {exc}") from None
             except (ValidationError, ValueError, TypeError, KeyError, ArithmeticError):
