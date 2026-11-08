@@ -22,8 +22,9 @@ from harness.core.prospective import (
 from harness.core.prospective_io import _load, _save
 from harness.core.replay import ReplayAttemptResult, validate_score
 from harness.packs.salesagent_study import (
+    ExecutionContract,
     StudyDefinition,
-    StudyExecutionContract,
+    StudyExecutionContractV2,
     StudyPreparation,
     verify_capture,
     verify_preparation,
@@ -130,7 +131,7 @@ class StudyAnalysis(Frozen):
         "salesagent-study-analysis-v1"
     )
     kind: Literal["derived_study_analysis"] = "derived_study_analysis"
-    contract: StudyExecutionContract
+    contract: ExecutionContract
     source_document_hash: Digest
     source_run_id: str
     suite_id: str
@@ -171,9 +172,7 @@ class StudyAnalysis(Frozen):
         return self
 
 
-def observed_context(
-    source: RunResult, contract: StudyExecutionContract
-) -> dict[str, Any]:
+def observed_context(source: RunResult, contract: ExecutionContract) -> dict[str, Any]:
     """Observed labels do not attest deployment fixtures or generation parameters."""
     r = contract.target.requested
     rows: list[dict[str, Any]] = []
@@ -254,7 +253,7 @@ def observed_context(
 
 def analyze(
     study: StudyDefinition,
-    contract: StudyExecutionContract,
+    contract: ExecutionContract,
     source: RunResult,
     *,
     document_hash: str,
@@ -487,6 +486,21 @@ def compare_studies(
         "target": (a.target.digest, b.target.digest),
         "methodology": (a.validation.methodology_hash, b.validation.methodology_hash),
     }
+    if isinstance(a, StudyExecutionContractV2) or isinstance(
+        b, StudyExecutionContractV2
+    ):
+
+        def execution_policy(contract: ExecutionContract) -> tuple[str, ...]:
+            if isinstance(contract, StudyExecutionContractV2):
+                return (
+                    contract.schema_version,
+                    contract.capture_policy,
+                    contract.journal_version,
+                    contract.completion_requirement,
+                )
+            return (contract.schema_version,)
+
+        context["execution_policy"] = (execution_policy(a), execution_policy(b))
     checks = {
         key: "equal" if left == right else "changed"
         for key, (left, right) in context.items()

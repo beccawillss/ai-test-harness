@@ -23,6 +23,7 @@ from harness.core.dataset import (
     _validation_detail,
     load_dataset,
 )
+from harness.core.execution_control import ExecutionControl
 from harness.core.fingerprints import canonical_json, fingerprint
 from harness.core.models import RunResult, TestCase
 from harness.core.replay import JudgeConfiguration
@@ -257,6 +258,7 @@ def execute_suite(
     evaluation_profile: str | None = None,
     case_payload_snapshot: PayloadPolicy | None = None,
     validate_reference: Callable[[TestCase], None] | None = None,
+    execution_control: ExecutionControl | None = None,
 ) -> RunResult:
     """Execute a validated, nonempty selection with explicit uniform scorers.
 
@@ -366,6 +368,8 @@ def execute_suite(
         fingerprint_scheme=CASE_SCHEME_V2,
         case_extra_keys=profile.case_extra_keys,
         case_payload_snapshot=policy,
+        execution_control=execution_control,
+        execution_context=context if execution_control is not None else None,
     )
     # Context was validated and copied BEFORE execution; never relabel a v1 result.
     result.config_snapshot.update(context)

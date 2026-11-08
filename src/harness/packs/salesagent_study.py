@@ -68,6 +68,15 @@ from harness.packs.salesagent_search import (
 )
 from harness.scorers.output_contracts import ScoreOutputContract
 from harness.scorers.rubric_judge import RubricJudgeScorer
+from harness.study.journal import (
+    COMPLETION_VERSION,
+    JOURNAL_VERSION,
+    POLICY,
+    RegistryBinding,
+    StudyJournal,
+    verify_completion,
+    verify_registry,
+)
 from harness.targets.salesagent import (
     ADAPTER_VERSION,
     EVIDENCE_VERSION,
@@ -579,6 +588,31 @@ class StudyExecutionContract(Frozen):
         return self
 
 
+class StudyExecutionContractV2(StudyExecutionContract):
+    schema_version: Literal["salesagent-study-execution-v2"] = (
+        "salesagent-study-execution-v2"  # type: ignore[assignment]
+    )
+    capture_policy: Literal["salesagent-study-capture-fail-fast-v1"] = POLICY
+    journal_version: Literal["salesagent-study-journal-v1"] = JOURNAL_VERSION
+    completion_requirement: Literal["salesagent-study-completion-v1"] = (
+        COMPLETION_VERSION
+    )
+    registry: RegistryBinding
+
+
+ExecutionContract = StudyExecutionContract | StudyExecutionContractV2
+
+
+def load_execution_contract(data: str | bytes) -> ExecutionContract:
+    version = strict_json(data).get("schema_version")
+    model = (
+        StudyExecutionContractV2
+        if version == "salesagent-study-execution-v2"
+        else StudyExecutionContract
+    )
+    return model.model_validate_json(data)
+
+
 def freeze_execution(
     study: StudyDefinition,
     target: StudyTargetFreeze,
@@ -588,13 +622,14 @@ def freeze_execution(
     author_review: str,
     reviewed_at: datetime,
     projection_version: str = semantic.PRODUCT_PROJECTION_VERSION,
-) -> StudyExecutionContract:
+    registry: RegistryBinding | None = None,
+) -> ExecutionContract:
     validation = validate_study(study.dataset, study.suites)
     if validation != study.validation:
         raise ValueError("Study changed after validation")
     matrix = matrix_contract()
     scoring, profile = semantic_profile(judge, projection_version=projection_version)
-    return StudyExecutionContract(
+    contract = StudyExecutionContract(
         validation=validation,
         capture_profile_json=canonical_json(
             capture_profile()[1].model_dump(mode="json")
@@ -623,11 +658,19 @@ def freeze_execution(
         reviewed_at=reviewed_at,
     )
 
+    if registry is not None:
+        verify_registry(registry)
+        data = contract.model_dump(mode="json")
+        data["schema_version"] = "salesagent-study-execution-v2"
+        data["registry"] = registry.model_dump(mode="json")
+        return StudyExecutionContractV2.model_validate_json(canonical_json(data))
+    return contract
+
 
 def verify_contract(
-    study: StudyDefinition, contract: StudyExecutionContract
-) -> StudyExecutionContract:
-    contract = StudyExecutionContract.model_validate_json(contract.model_dump_json())
+    study: StudyDefinition, contract: ExecutionContract
+) -> ExecutionContract:
+    contract = load_execution_contract(contract.model_dump_json())
     if validate_study(study.dataset, study.suites) != contract.validation:
         raise ValueError("Study no longer matches frozen execution contract")
     if (
@@ -653,7 +696,7 @@ class StudyTarget(Protocol):
 
 def capture(
     study: StudyDefinition,
-    contract: StudyExecutionContract,
+    contract: ExecutionContract,
     suite_id: str,
     target_factory: Callable[[], StudyTarget],
 ) -> RunResult:
@@ -676,49 +719,75 @@ def capture(
         "final_study_outcome": False,
     }
     validate_json_data(context)
-    target = target_factory()
-    r = contract.target.requested
-    expected = {
-        "base_url": r.base_url,
-        "target_revision": r.deployed_target_commit_sha,
-        "adapter_version": r.adapter_version,
-        "evidence_schema_version": r.evidence_schema_version,
-        "http_contract_version": r.http_contract_version,
-        "timeouts": r.timeouts.model_dump(mode="json") if r.timeouts else None,
-    }
+    journal = None
+    if isinstance(contract, StudyExecutionContractV2):
+        # Exclusive authority is acquired before client construction or dispatch.
+        journal = StudyJournal(
+            contract.registry, contract.digest, suite_id, context, CAPTURE_PROFILE
+        )
     try:
-        if (
-            target.name != "salesagent"
-            or set(target.capabilities) != set(r.capabilities)
-            or target.configuration != expected
-        ):
-            raise ValueError(
-                "Actual target adapter differs from frozen requested configuration"
-            )
-    except Exception:
-        target.close()
-        raise
-    scorer, profile = capture_profile(
-        reference_contract=strict_json(contract.capture_profile_json)[
-            "reference_contract"
-        ]
-    )
-    # execute_suite/run own close-on-completion; source context was copied before calls.
-    result = execute_suite(
-        resolved,
-        target,
-        [scorer],
-        profile=profile,
-        validate_reference=validate_reference,
-    )
-    result.pack_name = CAPTURE_PROFILE
-    result.config_snapshot["study"] = context
-    return result
+        target = target_factory()
+        r = contract.target.requested
+        expected = {
+            "base_url": r.base_url,
+            "target_revision": r.deployed_target_commit_sha,
+            "adapter_version": r.adapter_version,
+            "evidence_schema_version": r.evidence_schema_version,
+            "http_contract_version": r.http_contract_version,
+            "timeouts": r.timeouts.model_dump(mode="json") if r.timeouts else None,
+        }
+        try:
+            if (
+                target.name != "salesagent"
+                or set(target.capabilities) != set(r.capabilities)
+                or target.configuration != expected
+            ):
+                raise ValueError(
+                    "Actual target adapter differs from frozen requested configuration"
+                )
+            if journal is not None:
+                from harness.targets.salesagent import SalesAgentTarget
+                from harness.targets.salesagent_recording import SalesAgentRecorder
+
+                if (
+                    not isinstance(target, SalesAgentTarget)
+                    or target.recorder is not None
+                ):
+                    raise ValueError(
+                        "C2 capture requires the supported public HTTP recorder boundary"
+                    )
+                target.recorder = SalesAgentRecorder(journal.record_http)
+        except BaseException as exc:
+            try:
+                target.close()
+            except BaseException as cleanup:  # noqa: BLE001 - retain the original failure
+                exc.add_note(f"Target cleanup also failed: {type(cleanup).__name__}")
+            raise
+        scorer, profile = capture_profile(
+            reference_contract=strict_json(contract.capture_profile_json)[
+                "reference_contract"
+            ]
+        )
+        # execute_suite/run own close-on-completion; source context was copied before calls.
+        result = execute_suite(
+            resolved,
+            target,
+            [scorer],
+            profile=profile,
+            validate_reference=validate_reference,
+            execution_control=journal,
+        )
+        result.pack_name = CAPTURE_PROFILE
+        result.config_snapshot["study"] = context
+        return result
+    finally:
+        if journal is not None:
+            journal.close()
 
 
 def verify_capture(
     study: StudyDefinition,
-    contract: StudyExecutionContract,
+    contract: ExecutionContract,
     source: RunResult,
     document_hash: str,
 ) -> str:
@@ -793,6 +862,8 @@ def verify_capture(
             raise ValueError("Capture contains an unexpected scorer result")
         if [a.index for a in case.attempts] != list(range(binding.attempts)):
             raise ValueError("Capture attempt identity differs")
+    if isinstance(contract, StudyExecutionContractV2):
+        verify_completion(contract.registry, contract.digest, str(suite_id), source)
     return str(suite_id)
 
 
@@ -824,7 +895,7 @@ def _primary_ids(
 
 def prepare_primary(
     study: StudyDefinition,
-    contract: StudyExecutionContract,
+    contract: ExecutionContract,
     source: RunResult,
     *,
     database_locator: str,
@@ -906,7 +977,7 @@ def prepare_primary(
 
 def prepare_variance_diagnostic(
     study: StudyDefinition,
-    contract: StudyExecutionContract,
+    contract: ExecutionContract,
     source: RunResult,
     *,
     database_locator: str,
@@ -969,7 +1040,7 @@ def prepare_variance_diagnostic(
 
 def verify_preparation(
     study: StudyDefinition,
-    contract: StudyExecutionContract,
+    contract: ExecutionContract,
     preparation: StudyPreparation,
     source_loader: SourceLoader,
 ) -> None:
@@ -1060,7 +1131,7 @@ def verify_preparation(
 
 def human_manifest(
     study: StudyDefinition,
-    contract: StudyExecutionContract,
+    contract: ExecutionContract,
     preparation: StudyPreparation,
     source_loader: SourceLoader,
 ) -> CalibrationManifest:
@@ -1092,7 +1163,7 @@ def human_manifest(
 
 def judge_request(
     study: StudyDefinition,
-    contract: StudyExecutionContract,
+    contract: ExecutionContract,
     preparation: StudyPreparation,
     request_id: str,
     *,
