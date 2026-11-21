@@ -19,6 +19,8 @@ from test_canary_journal_v3 import (
     ready,
     receipt,
     retry_failure,
+    retry_writer,
+    spending_envelope,
     tree_bytes,
     turn,
 )
@@ -164,6 +166,55 @@ def test_saved_replay_rejects_rechained_retry_forgery_without_producer(tmp_path,
     assert (
         "PRIVATE_FORGED_DIRECTIVE" not in (tmp_path / "export/report.json").read_text()
     )
+    assert tree_bytes(Path(binding.path)) == before
+
+
+@pytest.mark.parametrize("boundary", ["next_call", "retry"])
+@pytest.mark.parametrize("input_tokens", [1000000, 1000001])
+def test_saved_replay_rejects_reservations_after_known_spending_pause(
+    tmp_path, boundary, input_tokens
+):
+    binding, writer = retry_writer(tmp_path)
+    retryable = boundary == "retry"
+    writer.record_dispatch(1, 1)
+    writer.record_provider_result(
+        1,
+        1,
+        spending_envelope(999999, retryable=retryable),
+        http_status=500 if retryable else 200,
+    )
+    if retryable:
+        writer.record_dispatch(1, 2)
+    else:
+        writer.complete_call(1)
+        writer.reserve_call(2)
+    writer.close()
+    control = journal.inspect_run(binding, "run-1")
+    assert control["structurally_validated"]
+    records = deepcopy(control["records"])
+    result = next(r for r in records if r["kind"] == "provider_result")
+    observation = provider_observation(
+        spending_envelope(input_tokens, retryable=retryable),
+        http_status=500 if retryable else 200,
+    )
+    result["payload"]["observation"] = observation
+    # The new result is internally consistent; the later reservation is illegal.
+    rejected_at = len(records) - 1
+    assert records[rejected_at]["kind"] == (
+        "provider_dispatch" if retryable else "call_reserved"
+    )
+    replace_saved_history(Path(binding.path) / "runs/run-1/records", records)
+    before = tree_bytes(Path(binding.path))
+    report = journal.inspect_run(binding, "run-1")
+    assert report["status"] == "corrupt"
+    assert report["records"] == records[:rejected_at]
+    assert (
+        report["records"][result["sequence"]]["payload"]["observation"] == observation
+    )
+    assert report["accounting"]["provider_attempts"] == 1
+    assert not report["accounting_reconciled"]
+    assert not report["completion_acknowledged"]
+    assert journal.recover_save_only(binding, "run-1", tmp_path / "export") == report
     assert tree_bytes(Path(binding.path)) == before
 
 

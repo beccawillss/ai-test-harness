@@ -2,10 +2,14 @@
 
 Approved baseline: `a68b13ea2a09345a0ad3de1ce486679ddb00c375`.
 Worktree: `/private/tmp/ai-test-harness-canary-runtime-v3-slice2`.
-Branch: `feat/canary-runtime-v3-slice2`. The latest human approval authorises one
-local commit after final verification, with message
-`Add offline v3 canary durable journal and evidence recording`.
-Push, PR creation, merge, Slice 3 and live execution remain unauthorised.
+Branch: `feat/canary-runtime-v3-slice2`. PR #27's approved pre-correction head is
+`036fe6473ee625c48b239f2b52ba80504e25c818`. The latest human instruction authorises
+one additional commit, `Enforce canary spending pause at reservation boundaries`,
+and its push to this existing feature branch, followed by a PR description update.
+Only the journal, its two test modules and this plan may change; the six-file PR
+inventory must remain unchanged. Do not amend the published commit, merge, enable
+auto-merge, begin Slice 3 or run live operations. Earlier permission notes below
+describe their respective historical milestones.
 
 The user's implementation approval supersedes the initial plan's proposed seal
 repair: recovery never writes to the authoritative registry, including a missing
@@ -433,3 +437,159 @@ worktree after creation, then stop for human review. Proposed PR title is the
 approved commit message; its description should cover the offline durable
 journal, privacy-safe evidence, bounded retry/accounting semantics, saved-replay
 validation, tests and the POSIX/authentication/optional-runtime limitations above.
+
+## PR #27 QA correction: known-spending reservation boundaries
+
+The initial investigation instruction authorised this correction within the
+existing six-file Slice 2 scope only, with no commit, push, merge or Slice 3.
+The published head stayed `036fe6473ee625c48b239f2b52ba80504e25c818` during that
+investigation; this section records its uncommitted review. Protected source,
+approved policies, locks, fixture-hash bindings and Study artifacts remained
+unchanged. The later publication authorisation is recorded at the top and below.
+
+- [x] Reproduce both reservation gaps against the published implementation.
+- [x] Add the smallest shared transition check without changing `decide()`.
+- [x] Verify exact, above and immediately-below threshold behavior, accumulated
+  spending, unknown liability and independently reconstructed saved histories.
+- [x] Re-run new, existing and full offline suites, fault injection and static
+  checks; recompute protected identities and report for independent human QA.
+
+The initial synthetic regression used the frozen estimator, with one million
+input tokens and zero output tokens yielding exactly $5 under conservative
+long-context pricing. One fewer/more input token yields $4.999995/$5.000005.
+Before the implementation correction, both new-call and same-call eligible-retry
+reservations were accepted at $5 and above: **4 failed, 2 passed** in 1.16 seconds.
+Each failure was `DID NOT RAISE JournalError` at the prohibited reservation. Both
+below-threshold controls passed. No provider requests or SDK execution occurred.
+
+Root cause: the locally known cost was supplied to the pure policy only at the
+next decision. The within-turn `call_reserved` and `provider_dispatch` transitions
+checked identities, accounting completeness or retry eligibility but omitted the
+historical C1 known-subtotal pause. C1's existing guard checks the subtotal even
+when retry unknown billing is allowed.
+
+The correction adds one four-line precondition to the shared `_apply` validator:
+for `call_reserved` or `provider_dispatch`, reject when the run-wide locally known
+`estimated_subtotal_usd` is at least `LIMITS.estimated_pause_usd`, using Decimal and
+the unchanged frozen $5 limit. This covers both producer and saved-record replay.
+It does not change the pure decision policy, pricing, retry eligibility, terminal
+exclusions, limits, record schema or observation classifications. It adds no SDK
+retry, dispatch, restart or recovery behavior.
+
+The existing `_record` failure path permanently closes the producer on rejection.
+No rejected reservation is published. The result that reached the threshold, its
+cost and its completed/retryable classification stay unchanged. Subsequent stop
+records are rejected by the closed producer; existing single-use reservations
+still prevent producer reopening. Result, call completion and evidence saving
+remain recordable after reaching $5 until a prohibited reservation is attempted;
+the unchanged policy still determines STOP at the next decision.
+
+The 16 new tests cover both boundaries at $4.999995, $5 and $5.000005, a known
+subtotal reaching the pause despite another attempt's unknown liability, sums
+across multiple calls/retries/turns, permanent closure and unchanged prior bytes.
+Four fully checksummed/rechained saved-history regressions replace the earlier
+result with an internally valid $5-or-above observation and prove the scanner
+rejects the following reservation while retaining that result in the validated
+prefix. Inspection/export remain read-only and cannot repair those histories.
+Histories containing previously accepted over-threshold reservations are now
+explicitly corrupt; no automatic migration or paid replay is available.
+
+The isolated new spending gate passed **16 tests** in 2.59 seconds. Existing
+500/500/200 unknown-billing semantics and all thirteen forged-retry replay cases
+must remain covered by the complete offline rerun. A below-threshold retry may
+remain representable despite earlier unknown usage; later success cannot erase
+that liability or permit a new logical call. A known subtotal at $5 must stop even
+when `estimated_total_usd` remains unknown.
+
+Future instrumentation must still independently verify operator controls, budget
+headroom and actual dispatch eligibility immediately before every network
+attempt. This local supplied-evidence precondition does not authenticate those
+controls or reserve prospective spend, and cannot prevent a single already-started
+attempt from itself reaching or exceeding $5.
+
+Final verification used the same stripped environment and pytest commands
+documented above, plus the isolated `-k known_spending_pause` regression gate:
+
+| Check | Actual result |
+| --- | --- |
+| Before correction, both boundaries at/below/above $5 | **4 failed, 2 passed**, 1.16 seconds |
+| New spending-boundary/replay tests after correction | **16 passed**, 2.59 seconds |
+| Complete journal/evidence/fault suites | **233 passed**, no skips, 35.99 seconds |
+| Existing canary/Study-journal/execution-control suites | **571 passed, 4 skipped**, 30.61 seconds |
+| Full locked offline suite | **3,242 passed, 4 skipped**, 180.89 seconds |
+| Ruff lint across src/tests | Passed |
+| Mypy | Passed, 58 source files |
+| Formatting, five Slice 2 Python files | Passed |
+| Repository-wide formatting | Same two unchanged baseline failures |
+| Git whitespace checks | Passed |
+| Protected identities and byte/mode checks | All 198 approved-base files unchanged |
+
+The full new suite retains the historical 500/500/200 regression and all thirteen
+forged-retry replay cases. Independent AST comparison confirms every pre-existing
+function/test body in both modified test modules is unchanged. Existing fault
+injection, crash/interruption, concurrency, privacy and save-only recovery checks
+all pass. The listening-server controller module remains explicitly excluded;
+the same four optional SDK/application checks remain skipped. No SDK, server,
+provider, judge or Study execution was invoked.
+
+The C1/v2.1/v3 fingerprints, application pin, fixture-hash bindings, locks and
+50-case Study dataset fingerprint were independently checked and remain unchanged.
+No actual application fixture or private operator evidence was accessed. Changes
+relative to published head are confined to `journal_v3.py`, its two existing test
+modules and this plan, all within the existing six additions. `evidence_v3.py`
+and its tests are unchanged. HEAD and the index remain unchanged; no commit,
+push, merge, remote PR update or Slice 3 work occurred.
+
+**Prior recommendation: ready for human QA of the uncommitted correction.**
+At that review, the published PR still contained the original head and did not
+contain this fix. The review covered the four-line shared transition precondition,
+retained threshold-reaching observations, permanent producer closure and replay
+rejection at the first prohibited reservation before commit/publication approval.
+Filesystem, supplied-evidence authenticity, external billing/operator controls and
+prospective per-attempt budget verification retain the boundaries documented above.
+
+## Reviewed spending correction: authorised publication
+
+Human QA accepted the reported correction and authorised one additional commit,
+`Enforce canary spending pause at reservation boundaries`, on the existing feature
+branch and PR #27. Its parent must be the unchanged published commit
+`036fe6473ee625c48b239f2b52ba80504e25c818`; the approved main base remains
+`a68b13ea2a09345a0ad3de1ce486679ddb00c375`. Do not amend or rewrite either commit.
+
+Only these four files may differ from the pre-correction head: `journal_v3.py`,
+`test_canary_journal_v3.py`, `test_canary_journal_v3_faults.py` and this plan. The
+complete PR must still contain exactly its six approved additions and no changes
+to any of the 198 files tracked at the approved base.
+
+Publication verification reran the unchanged reviewed implementation:
+
+| Check | Actual result |
+| --- | --- |
+| Journal/evidence/fault suites | **233 passed**, 36.29 seconds |
+| Full locked offline suite | **3,242 passed, 4 skipped**, 181.25 seconds |
+| Sixteen spending tests, historical retries and thirteen saved-replay regressions | Passed in both reruns |
+| Ruff lint across src/tests | Passed |
+| Mypy | Passed, 58 source files |
+| Formatting, five Slice 2 Python files | Passed |
+| Repository-wide formatting | Same two unchanged baseline failures |
+| Protected identities, original regression bodies and whitespace | Passed |
+
+The listening-server controller module was explicitly excluded. The same four
+optional SDK/application checks were skipped; no SDK/application execution was
+enabled. All 198 baseline file bytes and executable modes, approved fingerprints,
+source/application pins, fixture-hash bindings, dependency locks and the 50-case
+Study dataset identity remain unchanged. Actual application fixtures and private
+operator evidence were not accessed; no credential-shaped literals are included.
+
+The four-line source precondition is unchanged from the reviewed correction.
+Producer rejection and saved replay both enforce the known subtotal pause, retain
+threshold-reaching results and unknown liabilities, and preserve the unchanged
+`decide()` and SDK retry semantics. Future real dispatch still requires independent
+operator, headroom and eligibility checks immediately before each network attempt.
+
+Stage exactly the four authorised files, verify staged bytes and whitespace, then
+create and push only the additional commit. Update the existing PR description
+with these safeguards and final totals. Verify the remote head/parent, exact
+four-file correction, six-file PR inventory, published blob identities,
+mergeability and CI status after publication. Stop for final human QA without
+merging, auto-merge, Slice 3, servers, provider requests, judging or Study execution.

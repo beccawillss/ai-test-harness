@@ -556,6 +556,150 @@ def test_saved_over_budget_usage_stops_policy_and_remains_visible(tmp_path):
     assert report["operational_assessment"]["status"] == "ERROR"
 
 
+def spending_envelope(input_tokens, *, retryable=False):
+    raw = retry_failure() if retryable else envelope()
+    # Frozen conservative long-context pricing: $5 for one million input tokens.
+    raw["usage"] = {
+        "input_tokens": input_tokens,
+        "output_tokens": 0,
+        "total_tokens": input_tokens,
+    }
+    return raw
+
+
+@pytest.mark.parametrize("boundary", ["next_call", "retry"])
+@pytest.mark.parametrize(
+    "input_tokens,subtotal,paused",
+    [
+        (999999, "4.999995", False),
+        (1000000, "5", True),
+        (1000001, "5.000005", True),
+    ],
+)
+def test_known_spending_pause_at_reservation_boundaries(
+    tmp_path, boundary, input_tokens, subtotal, paused
+):
+    binding, writer = retry_writer(tmp_path)
+    writer.record_dispatch(1, 1)
+    retryable = boundary == "retry"
+    writer.record_provider_result(
+        1,
+        1,
+        spending_envelope(input_tokens, retryable=retryable),
+        http_status=500 if retryable else 200,
+    )
+    if not retryable:
+        writer.complete_call(1)
+    before = tree_bytes(Path(binding.path))
+    if paused:
+        with pytest.raises(journal.JournalError):
+            if retryable:
+                writer.record_dispatch(1, 2)
+            else:
+                writer.reserve_call(2)
+        # A rejected reservation closes the whole producer, even for safe records.
+        with pytest.raises(journal.JournalError):
+            writer.stop()
+        assert tree_bytes(Path(binding.path)) == before
+    else:
+        if retryable:
+            writer.record_dispatch(1, 2)
+        else:
+            writer.reserve_call(2)
+            writer.record_dispatch(2, 1)
+        writer.close()
+    report = journal.inspect_run(binding, "run-1")
+    assert report["structurally_validated"]
+    assert Decimal(report["accounting"]["estimated_subtotal_usd"]) == Decimal(subtotal)
+    assert report["accounting"]["provider_attempts"] == (1 if paused else 2)
+    results = [r for r in report["records"] if r["kind"] == "provider_result"]
+    assert len(results) == 1
+    observed = results[0]["payload"]["observation"]
+    assert Decimal(observed["estimated_usd"]) == Decimal(subtotal)
+    assert observed["outcome"] == (
+        "retryable_http_failure" if retryable else "completed"
+    )
+    assert report["accounting"]["unknown_attempts"] == (0 if paused else 1)
+
+
+@pytest.mark.parametrize("input_tokens", [999999, 1000000, 1000001])
+def test_known_spending_pause_uses_subtotal_despite_unknown_retry_liability(
+    tmp_path, input_tokens
+):
+    binding, writer = retry_writer(tmp_path)
+    writer.record_dispatch(1, 1)
+    writer.record_provider_result(1, 1, retry_failure(), http_status=500)
+    writer.record_dispatch(1, 2)
+    writer.record_provider_result(
+        1, 2, spending_envelope(input_tokens, retryable=True), http_status=500
+    )
+    if input_tokens >= 1000000:
+        before = tree_bytes(Path(binding.path))
+        with pytest.raises(journal.JournalError):
+            writer.record_dispatch(1, 3)
+        with pytest.raises(journal.JournalError):
+            writer.stop()
+        assert tree_bytes(Path(binding.path)) == before
+    else:
+        writer.record_dispatch(1, 3)
+        raw = envelope()
+        raw["usage"] = {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0}
+        writer.record_provider_result(1, 3, raw, http_status=200)
+        writer.complete_call(1)
+        with pytest.raises(journal.JournalError):
+            writer.reserve_call(2)  # Success cannot erase attempt 1's liability.
+    report = journal.inspect_run(binding, "run-1")
+    assert report["structurally_validated"]
+    assert report["accounting"]["estimated_total_usd"] is None
+    assert report["accounting"]["unknown_attempts"] == 1
+    assert Decimal(report["accounting"]["estimated_subtotal_usd"]) == (
+        Decimal(input_tokens) * Decimal("0.000005")
+    )
+    assert report["accounting"]["provider_attempts"] == (
+        2 if input_tokens >= 1000000 else 3
+    )
+
+
+@pytest.mark.parametrize("boundary", ["next_call", "retry", "later_turn"])
+def test_known_spending_pause_accumulates_all_recorded_attempts(tmp_path, boundary):
+    binding, writer = retry_writer(tmp_path)
+    for number in (1, 2):
+        retryable = boundary == "retry"
+        if number == 2 and not retryable:
+            if boundary == "later_turn":
+                finish_evidence(writer)
+                assert writer.record_decision(ready()).next_slot == "B1"
+                writer.reserve_turn("B1")
+                writer.reserve_call(1)
+            else:
+                writer.reserve_call(2)
+        logical_call = number if boundary == "next_call" else 1
+        attempt = number if retryable else 1
+        writer.record_dispatch(logical_call, attempt)
+        writer.record_provider_result(
+            logical_call,
+            attempt,
+            spending_envelope(500000, retryable=retryable),
+            http_status=500 if retryable else 200,
+        )
+        if not retryable:
+            writer.complete_call(logical_call)
+    before = tree_bytes(Path(binding.path))
+    with pytest.raises(journal.JournalError):
+        if boundary == "retry":
+            writer.record_dispatch(1, 3)
+        else:
+            writer.reserve_call(2 if boundary == "later_turn" else 3)
+    with pytest.raises(journal.JournalError):
+        writer.stop()
+    assert tree_bytes(Path(binding.path)) == before
+    report = journal.inspect_run(binding, "run-1")
+    assert report["structurally_validated"]
+    assert report["accounting"]["provider_attempts"] == 2
+    assert report["accounting"]["unknown_attempts"] == 0
+    assert Decimal(report["accounting"]["estimated_subtotal_usd"]) == 5
+
+
 def test_external_unknown_liability_still_stops_with_empty_local_ledger(tmp_path):
     _, writer = make(tmp_path)
     assert writer.record_decision(ready(unknown_attempts=1)).action == "STOP"

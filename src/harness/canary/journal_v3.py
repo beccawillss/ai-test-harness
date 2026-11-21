@@ -480,6 +480,10 @@ def _apply(run: _Run, kind: str, p: dict[str, Any], sequence: int) -> None:
             raise JournalError("no_active_turn")
         if run.evidence[slot]:
             raise JournalError("provider_work_after_public_evidence")
+        if kind in {"call_reserved", "provider_dispatch"} and Decimal(
+            run.accounting()["estimated_subtotal_usd"]
+        ) >= Decimal(LIMITS.estimated_pause_usd):
+            raise JournalError("known_spending_pause")
         if type(number) is not int or not 1 <= number <= LIMITS.logical_calls_per_turn:
             raise JournalError("invalid_logical_call")
         key = (slot, number)
