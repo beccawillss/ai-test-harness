@@ -172,6 +172,163 @@ def records(report, kind):
     return [r["payload"] for r in report["records"] if r["kind"] == kind]
 
 
+def observe_stop_mutex_entry(writer, monkeypatch, stopper):
+    """Observe stop at lock entry while retaining the journal's original RLock."""
+    mutex = writer._mutex
+    waiting = threading.Event()
+
+    class ObservedMutex:
+        def __enter__(self):
+            if threading.current_thread() is stopper:
+                waiting.set()
+            return mutex.__enter__()
+
+        def __exit__(self, *args):
+            return mutex.__exit__(*args)
+
+    monkeypatch.setattr(writer, "_mutex", ObservedMutex())
+    return waiting
+
+
+def test_public_stop_closes_gate_before_waiting_for_journal_mutex(
+    tmp_path, monkeypatch
+):
+    registry, writer, binding = profiled(tmp_path)
+    transport = ProviderTransportV3(
+        writer,
+        binding,
+        httpx.MockTransport(lambda r: pytest.fail("forwarded")),
+        guards=attempt_guards,
+    )
+    errors, observed = [], []
+
+    def stop():
+        try:
+            writer.stop()
+        except BaseException as error:  # noqa: BLE001 - collect worker failures for bounded cleanup
+            errors.append(type(error).__name__)
+
+    stopper = threading.Thread(target=stop)
+    waiting = observe_stop_mutex_entry(writer, monkeypatch, stopper)
+    try:
+        # Simulate a durable recording operation retaining the original RLock.
+        with writer._mutex:
+            stopper.start()
+            assert waiting.wait(5)
+            rejected = False
+            try:
+                transport._require_open()  # The existing provider entry gate.
+            except CanaryError:
+                rejected = True
+            observed.append((writer.provider_stopped, rejected))
+    finally:
+        stopper.join(5)
+        writer.close()
+    assert not stopper.is_alive() and errors == []
+    report = journal.inspect_run(registry, "run-1")
+    assert observed == [(True, True)]  # Latch closed, following gate rejected.
+    assert report["instrumentation_stop"] == "operator_stop"
+    assert records(report, "instrumented_dispatch") == []
+
+
+@pytest.mark.parametrize("control", ["journal", "transport"])
+@pytest.mark.parametrize(
+    "retryable", [False, True], ids=["completed", "eligible-retry"]
+)
+def test_stop_during_result_publication_blocks_retry_and_preserves_result(
+    tmp_path, monkeypatch, control, retryable
+):
+    registry, writer, binding = profiled(tmp_path)
+    recording, release, stop_done = (threading.Event() for _ in range(3))
+    forwarded, call_errors, stop_errors = [], [], []
+    original = journal._publish
+
+    def publish(directory, name, value):
+        if value.get("kind") == "instrumented_result":
+            recording.set()  # Actual result recording holds the journal RLock.
+            assert release.wait(5)
+        original(directory, name, value)
+
+    monkeypatch.setattr(journal, "_publish", publish)
+    transport = ProviderTransportV3(
+        writer,
+        binding,
+        httpx.MockTransport(
+            lambda r: (
+                forwarded.append(r)
+                or httpx.Response(
+                    500 if retryable else 200,
+                    json=retry_failure(known_zero_usage=True)
+                    if retryable
+                    else envelope(),
+                )
+            )
+        ),
+        guards=attempt_guards,
+    )
+
+    def create(application):
+        response = transport.handle_request(prepared(binding, application))
+        # Drain the stop record before the delegate's next retry/return boundary.
+        assert stop_done.wait(5)
+        if retryable:
+            transport.handle_request(prepared(binding, application, retry=1))
+        return SimpleNamespace(response_id=response.json().get("id"))
+
+    client = BoundedResponsesClientV3(
+        SimpleNamespace(create_response=create), transport
+    )
+
+    def invoke():
+        try:
+            client.create_response(app_request())
+        except BaseException as error:  # noqa: BLE001 - report worker failure on the test thread
+            call_errors.append(type(error).__name__)
+
+    def stop():
+        try:
+            writer.stop() if control == "journal" else transport.request_stop()
+        except BaseException as error:  # noqa: BLE001 - report worker failure on the test thread
+            stop_errors.append(type(error).__name__)
+        finally:
+            stop_done.set()
+
+    caller, stopper = threading.Thread(target=invoke), threading.Thread(target=stop)
+    waiting = observe_stop_mutex_entry(writer, monkeypatch, stopper)
+    caller.start()
+    try:
+        assert recording.wait(5)
+        root = Path(registry.path) / "runs" / "run-1" / "records"
+        before = {path: path.read_bytes() for path in root.iterdir()}
+        stopper.start()
+        assert waiting.wait(5)
+        assert writer.provider_stopped and transport.stopped
+        assert not stop_done.is_set()  # Stop is still waiting on the held mutex.
+        with pytest.raises(CanaryError):
+            transport.handle_request(prepared(binding, app_request(), retry=1))
+        assert len(forwarded) == 1
+    finally:
+        release.set()
+        caller.join(5)
+        if stopper.ident is not None:
+            stopper.join(5)
+        writer.close()
+    assert not caller.is_alive() and not stopper.is_alive()
+    assert call_errors == ["CanaryError"] and stop_errors == []
+    assert all(path.read_bytes() == content for path, content in before.items())
+    report = journal.inspect_run(registry, "run-1")
+    assert len(forwarded) == len(records(report, "instrumented_dispatch")) == 1
+    assert len(records(report, "instrumented_result")) == 1
+    result = records(report, "instrumented_result")[0]["observation"]
+    assert result["outcome"] == ("retryable_http_failure" if retryable else "completed")
+    assert report["accounting"]["unknown_attempts"] == 0
+    assert report["instrumentation_stop"] == "operator_stop"
+    assert report["instrumentation_terminal_stop_recorded"]
+    assert records(report, "instrumented_call_finished")[0]["outcome"] == "error"
+    assert report["status"] == "operationally_uncertain" and report["issues"] == []
+    assert report["dispatch_available"] is False
+
+
 def change_wire(request, field, *, missing=False):
     body = json.loads(request.content)
     if missing:

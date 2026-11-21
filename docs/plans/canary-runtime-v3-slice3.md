@@ -325,8 +325,8 @@ credentials, live provider requests, judging and Study execution remain excluded
 - [x] Recheck exact nine-file scope, protected bytes and approved base.
 - [x] Review complexity and request-validation boundaries without source changes.
 - [x] Rerun focused, pinned SDK, full locked offline and static checks.
-- [ ] Commit once with the exact parent and verify committed bytes.
-- [ ] Push, open the PR and verify published head/base, scope and status.
+- [x] Commit once with the exact parent and verify committed bytes.
+- [x] Push, open the PR and verify published head/base, scope and status.
 
 Before publication, all 199 tracked files outside the five approved modifications
 still match the approved base in bytes and executable modes. The index was empty,
@@ -398,3 +398,156 @@ This is the checked pre-commit publication record. The last two actions above
 follow this report; PR metadata and the final external report carry their actual
 commit SHA, CI/review status and remote-byte confirmation. This plan will not
 require a second commit to record its own publication.
+
+## PR #28 independent QA follow-up: stop latch before journal synchronisation
+
+Published review baseline: `f1ec3c3ed142ed4807341d5bdbed81d8526eb1e3`, sole parent
+`93fbceaed1acfa3284190af39de2c3f0d6fa9abc`, PR
+`https://github.com/beccawillss/ai-test-harness/pull/28`. The prior publication
+completed with matching remote commit/tree/nine file blobs and modes; its
+pre-publication milestones above are now marked complete. The user's new
+authorisation permits this local offline correction only. **Do not commit, push,
+amend the PR, resolve its review thread, merge or start Slice 4.** No servers,
+credentials, live provider calls, judging or Study execution are permitted.
+
+- [x] Confirm a clean local worktree at the exact reviewed commit.
+- [x] Add and run a deterministic reproduction before modifying source.
+- [x] Close the existing provider latch at public stop entry, before the mutex.
+- [x] Add bounded contention, result-drain, failure and legacy regressions.
+- [x] Rerun focused, pinned SDK, full locked offline and static verification.
+- [x] Verify exact local diff and protected bytes; stop for independent human QA.
+
+Reproduction command, using the stripped harness environment documented above:
+
+```text
+python -B -m pytest tests/test_canary_instrumentation_v3.py -k public_stop_closes_gate_before_waiting -q --tb=short
+```
+
+Against unchanged published source: **one failed, 89 deselected, 1.19 seconds**.
+The test retains the original journal RLock while simulating durable recording.
+A second thread calls public `stop()`. A context-manager observer sets an Event
+at that thread's mutex-entry boundary, before delegating to the held original
+RLock. At that exact point, the observed pair `(latch_closed, gate_rejected)` was
+`(False, False)`: the dispatch latch remained open and the existing provider gate
+check passed. This demonstrates admission through that gate, not a claim that a
+second HTTP dispatch completed. No sleeps or lock-acquisition timing assumptions
+are used. Waits/joins are bounded and cleanup releases the held operation.
+
+The reproduction was reported before the source correction. The correction is
+one executable line at the start of `CanaryJournal.stop()`:
+
+```python
+self._provider_gate.set()  # Close dispatch before waiting for journal I/O.
+```
+
+The existing synchronized stop path then records the same terminal evidence.
+No new lock, scheduling loop, retry mechanism, asynchronous worker, record schema,
+replay rule or interface is introduced. Invalid or failed stops cannot undo this
+permanent latch. Legacy unprofiled stops still emit the original `stop` record
+and code; their provider latch is unused by the legacy execution path. Historical
+C1 source and behaviour remain untouched.
+
+After correction the reproduction passes: **one passed, 89 deselected, 0.67
+seconds**. The complete new regression selection passes **14 cases, 199
+deselected, 4.02 seconds**. It covers both journal and transport stop while actual
+`instrumented_result` publication retains the mutex, for completed responses and
+eligible known-zero-usage HTTP 500 retries. The latch closes before lock entry;
+later attempt entry is rejected with one original dispatch only. The already
+dispatched result drains and retains known usage; stop publication then completes
+with `operator_stop`, an error-finished call and operationally uncertain saved
+evidence, without losing earlier committed bytes. A delegate-side Event lets stop
+publication finish before the retry/return boundary, so record ordering is
+deterministic without assuming RLock fairness.
+
+Additional cases cover invalid stop codes and failures before/after visible stop
+publication for both journal profiles. Every case retains the permanent latch and
+original evidence prefix; any visible stop record remains valid on replay.
+Legacy stop records retain all three original codes and the original schema.
+The test observer wraps the existing RLock and introduces no replacement lock.
+
+Final verification and the exact four-file local diff are recorded below.
+The existing approved nine-file PR scope remains the outer boundary; no other
+implementation, policy, application, dataset, fixture or historical file changes
+are authorised.
+
+| Local stop-correction verification | Actual result |
+| --- | --- |
+| New bounded stop/record/failure/legacy cases | 14 passed, 4.02 seconds |
+| Focused instrumentation/evidence/journal/fault suites | 397 passed, no skips, 95.14 seconds |
+| Pinned OpenAI 3.3.1 instrumentation and historical SDK suites | 28 passed, no skips, 25.50 seconds |
+| Full locked offline suite excluding controller module | 3,406 passed, five optional skips, 241.14 seconds |
+| Ruff | Passed across src/tests |
+| Mypy | Passed, all 59 source files |
+| Formatting | All eight Slice 3 Python files pass |
+| Existing tests in the two modified modules | All 62 functions/classes unchanged by AST comparison |
+| Published-head preservation | All 204 files outside the four local modifications match in bytes/modes |
+| Approved-base preservation | All 199 protected files match in bytes/modes |
+| Application source pin | HEAD is 3320e556540d3f95bee1e8509f13e558ce266b6c; Responses client unchanged |
+| Harness environment | 23 installed distributions match the unchanged lock |
+
+All verification uses the previously documented stripped offline environments and
+commands. The pinned SDK module itself is unchanged; its actual SDK retries,
+request-integrity negatives, history/function-output positives and historical
+500/500/200 cases pass. The only lint follow-up annotated the test thread handlers'
+intentional BaseException collection; it changed no executable statements.
+The five full-suite skips are both SDK modules, both optional application-state
+modules, and the complete pinned CPython 3.13 source-composition check. Both SDK
+modules passed separately with zero skips; the two state modules and full source
+composition remain unexecuted. `tests/test_canary_controller.py` was explicitly
+excluded and no listening server ran. Final tracked whitespace checks pass.
+
+Exact local patch against the reviewed PR head:
+`/private/tmp/c3b-slice3-stop-latch.patch`. Only the four preferred files are
+modified. The executable source delta is the single latch-setting line;
+instrumentation tests add 157 lines, and journal tests add 63 lines. Documentation
+records this reproduction and verification and marks the previously completed
+publication steps accurately. The index is untouched and HEAD remains exactly
+`f1ec3c3ed142ed4807341d5bdbed81d8526eb1e3`. The overall PR inventory is still four
+additions and five modifications against its approved base.
+
+**Recommendation: ready for independent human QA of this local patch.** No commit,
+push, PR amendment, review-thread resolution, merge or live action was performed.
+
+Remaining limitations: already-dispatched work may finish after dispatch closes;
+the correction preserves its evidence rather than cancelling it. Public `stop()`
+still waits for journal synchronisation to publish its durable terminal record.
+Recording failure or process loss can prevent that record; the in-memory gate
+cannot reopen, and persisted evidence remains inspection/save-only. The mock and
+trusted-process limits above remain unchanged; these tests do not establish live
+transport behaviour or hard real-time scheduling guarantees.
+
+## Final operator-stop correction publication
+
+The user's later instruction authorises one additional commit named
+`Close v3 provider dispatch gate before journal stop locking` and a normal push
+to the existing feature branch and PR #28. Its parent must remain exactly
+`f1ec3c3ed142ed4807341d5bdbed81d8526eb1e3`; the original published commit is not
+amended, squashed, rebased or rewritten. This publication approval supersedes the
+preceding local-only restriction. Merge, auto-merge, Slice 4, credentials, servers,
+live providers, judging and Study execution remain excluded.
+
+The entire four-file patch first matched the previously verified local patch
+byte for byte (SHA-256
+`1a34cd857f14eae66889e54b47e3002784149391039548e4409f77ab2c99f3fc`). No further
+executable source or test edits were needed. Only this publication record was
+added. The 14 stop regressions were refreshed: **14 passed, 199 deselected, 3.76
+seconds**. Ruff, mypy (59 source files), formatting (all eight Slice 3 Python
+files) and whitespace checks pass. The unchanged executable/test bytes retain
+the reported **397 focused passes, 28 pinned SDK mock passes and 3,406 full
+offline passes with five optional skips**; those broader suites were not rerun
+during this publication step. Listening-server controller tests remain excluded.
+
+Pre-publication checks confirm all nine requested properties: gate closure before
+mutex acquisition; no additional locks/schemas/replay changes; all 14 regressions;
+no later retry/intent admission; in-flight result drain; permanent closure after
+stop-record failures; unchanged legacy interpretation; retained historical retry,
+request-integrity, spending, privacy and replay results; and unchanged protected
+fingerprints, application pins, fixtures, locks and Study data. All 204 other
+published-head files and all 199 protected approved-base files match in bytes and
+executable modes. Remote main and feature refs still match their approved SHAs.
+
+The existing operator-stop thread `PRRT_kwDOTj88Ls66ZIN6` is open and must remain
+open for independent verification of the published correction. Publication will
+update only the PR description, leaving thread resolution to human QA. This is
+the pre-commit record; the final external report and PR metadata will give the
+new commit SHA, exact parent, remote-byte confirmation and current review status.

@@ -1489,6 +1489,7 @@ class CanaryJournal:
         )
 
     def stop(self, code: str = "operator_stop") -> None:
+        self._provider_gate.set()  # Close dispatch before waiting for journal I/O.
         with self._mutex:
             if self._run.provider_profile is not None:
                 mapped = {

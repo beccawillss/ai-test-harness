@@ -872,6 +872,69 @@ def test_operator_stop_blocks_an_otherwise_eligible_retry(tmp_path):
     assert journal.inspect_run(binding, "run-1")["accounting"]["provider_attempts"] == 1
 
 
+@pytest.mark.parametrize("code", ["operator_stop", "interrupted", "operational_error"])
+def test_public_stop_preserves_legacy_record_protocol(tmp_path, code):
+    registry, writer = make(tmp_path)
+    writer.stop(code)
+    assert writer.provider_stopped
+    writer.close()
+    report = journal.inspect_run(registry, "run-1")
+    assert report["issues"] == [] and "instrumentation_profile" not in report
+    assert [record["kind"] for record in report["records"]] == ["manifest", "stop"]
+    assert report["records"][-1]["payload"] == {"code": code}
+    assert all(record["schema_id"] == journal.SCHEMA for record in report["records"])
+
+
+@pytest.mark.parametrize("profile", [False, True], ids=["legacy", "instrumented"])
+@pytest.mark.parametrize(
+    "fault", ["invalid", "before_publication", "after_publication"]
+)
+def test_failed_public_stop_never_reopens_gate_or_replaces_evidence(
+    tmp_path, monkeypatch, profile, fault
+):
+    from test_canary_instrumentation_v3 import profiled
+
+    if profile:
+        registry, writer, _ = profiled(tmp_path)
+    else:
+        registry, writer = make(tmp_path)
+    before = tree_bytes(Path(registry.path))
+    original = journal._publish
+
+    def publish(directory, name, value):
+        if value.get("kind") in {"stop", "instrumentation_stop"}:
+            assert writer.provider_stopped
+            if fault == "after_publication":
+                original(directory, name, value)
+            raise OSError("PRIVATE_STOP_FAILURE")
+        original(directory, name, value)
+
+    with monkeypatch.context() as patch:
+        if fault != "invalid":
+            patch.setattr(journal, "_publish", publish)
+        with pytest.raises(journal.JournalError) as error:
+            writer.stop(
+                "PRIVATE_INVALID_STOP" if fault == "invalid" else "operator_stop"
+            )
+    assert writer.provider_stopped
+    with pytest.raises(journal.JournalError):
+        writer.stop()
+    assert writer.provider_stopped
+    writer.close()
+    after = tree_bytes(Path(registry.path))
+    assert all(after[name] == content for name, content in before.items())
+    report = journal.inspect_run(registry, "run-1")
+    kind = "instrumentation_stop" if profile else "stop"
+    stops = [
+        record["payload"] for record in report["records"] if record["kind"] == kind
+    ]
+    assert len(stops) == int(fault == "after_publication")
+    if stops:
+        assert stops[0]["code"] == "operator_stop"
+    assert report["issues"] == [] and not report["completion_certified"]
+    assert "PRIVATE" not in str(error.value) + str(report)
+
+
 def test_instrumentation_requires_explicit_exact_definition_and_is_deeply_frozen(
     tmp_path,
 ):
