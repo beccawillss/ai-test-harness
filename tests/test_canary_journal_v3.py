@@ -78,6 +78,138 @@ def retry_failure(*, known_zero_usage=False):
     return value
 
 
+def test_driver_snapshot_observes_profile_without_appending_or_sharing_state(tmp_path):
+    registry, writer = make(tmp_path)
+    binding = writer.bind_provider(
+        resolve_definition(V3),
+        project_id="proj_synthetic",
+        organization_id="org_synthetic",
+    )
+    before = tree_bytes(Path(registry.path))
+    snapshot = writer.driver_snapshot(binding)
+    assert snapshot.binding == binding and snapshot.decision is None
+    assert snapshot.decision_sequence is None and snapshot.active_slot is None
+    assert not snapshot.stopped and not snapshot.authorises_live_execution
+    snapshot.accounting["logical_calls"] = 999
+    snapshot.turn_accounting["A1"]["provider_attempts"] = 999
+    snapshot.evidence["A1"] = {"chat": {"session_id": "forged"}}
+    fresh = writer.driver_snapshot(binding)
+    assert (
+        fresh.accounting["logical_calls"]
+        == fresh.turn_accounting["A1"]["provider_attempts"]
+        == 0
+    )
+    assert not fresh.evidence and not fresh.completed_call_usage
+    assert tree_bytes(Path(registry.path)) == before
+    writer.close()
+
+
+def test_driver_snapshot_decision_active_slot_public_evidence_and_final_usage(tmp_path):
+    from datetime import UTC, datetime
+
+    from test_canary_instrumentation_v3 import app_request, client_for, profiled
+
+    from harness.canary.evidence_v3 import AttemptGuards
+    from harness.canary.instrumentation_v3 import ProviderTransportV3
+
+    _registry, writer, binding = profiled(tmp_path)
+    active = writer.driver_snapshot(binding)
+    assert active.decision.action == "ADVANCE" and active.decision.next_slot == "A1"
+    assert active.active_slot == "A1" and active.decision_sequence == 2
+    provider = ProviderTransportV3(
+        writer,
+        binding,
+        httpx.MockTransport(lambda _: httpx.Response(200, json=envelope())),
+        guards=lambda: AttemptGuards(
+            checked_at=datetime.now(UTC).isoformat(),
+            **{
+                name: True
+                for name, field in AttemptGuards.model_fields.items()
+                if field.annotation is bool
+            },
+        ),
+    )
+    client_for(provider).create_response(app_request())
+    value = selected("A1")
+    writer.record_chat(value["chat"])
+    writer.record_trace(value["trace"], reread=copy.deepcopy(value["trace"]))
+    snapshot = writer.driver_snapshot(binding)
+    assert snapshot.completed_call_usage == (
+        {
+            "slot": "A1",
+            "logical_call": 1,
+            "response_id": "resp_test",
+            "input_tokens": 100,
+            "output_tokens": 10,
+            "total_tokens": 110,
+        },
+    )
+    assert snapshot.turn_accounting["A1"]["logical_calls"] == 1
+    assert snapshot.turn_accounting["B1"]["logical_calls"] == 0
+    snapshot.evidence["A1"]["trace"]["resolved_constraints"]["colour"] = "forged"
+    snapshot.completed_call_usage[0]["input_tokens"] = 0
+    assert (
+        writer.driver_snapshot(binding).evidence["A1"]["trace"]["resolved_constraints"][
+            "colour"
+        ]
+        == "Moss"
+    )
+    assert (
+        writer.driver_snapshot(binding).completed_call_usage[0]["input_tokens"] == 100
+    )
+    writer.assess_turn()
+    writer.complete_turn()
+    decision = writer.record_decision(ready())
+    assert writer.driver_snapshot(binding).decision == decision
+    writer.stop()
+    stopped = writer.driver_snapshot(binding)
+    assert stopped.stopped and stopped.decision.action == "ADVANCE"
+    writer.close()
+    with pytest.raises(journal.JournalError):
+        writer.driver_snapshot(binding)
+
+
+@pytest.mark.parametrize("change", ["run_id", "project_id", "definition", "extra"])
+def test_driver_snapshot_binding_mismatch_is_terminal(tmp_path, change):
+    registry, writer = make(tmp_path)
+    binding = writer.bind_provider(
+        resolve_definition(V3),
+        project_id="proj_synthetic",
+        organization_id="org_synthetic",
+    )
+    value = {
+        "run_id": "other",
+        "project_id": "proj_other",
+        "definition": resolve_definition(),
+        "extra": True,
+    }[change]
+    wrong = binding.model_copy(update={change: value})
+    before = tree_bytes(Path(registry.path))
+    with pytest.raises(journal.JournalError):
+        writer.driver_snapshot(wrong)
+    assert writer.provider_stopped and tree_bytes(Path(registry.path)) == before
+    assert journal.inspect_run(registry, "run-1")["status"] == "incomplete"
+
+
+def test_driver_snapshot_cannot_upgrade_an_unprofiled_slice2_journal(tmp_path):
+    registry, writer = make(tmp_path)
+    binding = journal.ProviderBinding(
+        definition=resolve_definition(V3),
+        registry_id=registry.registry_id,
+        run_id="run-1",
+        source_receipt_sha256=fingerprint(receipt().model_dump(mode="json")),
+        project_id="proj_synthetic",
+        organization_id="org_synthetic",
+    )
+    before = tree_bytes(Path(registry.path))
+    with pytest.raises(journal.JournalError):
+        writer.driver_snapshot(binding)
+    assert writer.provider_stopped and tree_bytes(Path(registry.path)) == before
+    report = journal.inspect_run(registry, "run-1")
+    assert "instrumentation_profile" not in report
+    assert len(report["records"]) == 1
+
+
 def test_historical_500_500_200_is_representable_and_keeps_unknown_billing(tmp_path):
     from harness.canary.recording import CanaryError, CanaryStore, ProviderTransport
 

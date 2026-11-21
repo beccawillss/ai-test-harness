@@ -105,6 +105,26 @@ class ProviderSnapshot(Frozen):
     stopped: bool
 
 
+@dataclass(frozen=True)
+class DriverSnapshot:
+    """Copy-isolated producer observations, never a resumable execution token.
+
+    Nested dictionaries are independent copies of approved public projections
+    and safe accounting scalars. Mutating them cannot change journal state.
+    """
+
+    binding: ProviderBinding
+    decision: Decision | None
+    decision_sequence: int | None
+    active_slot: str | None
+    stopped: bool
+    evidence: dict[str, dict[str, Any]]
+    accounting: dict[str, Any]
+    turn_accounting: dict[str, dict[str, Any]]
+    completed_call_usage: tuple[dict[str, Any], ...]
+    authorises_live_execution: Literal[False] = False
+
+
 def _identifier(value: str) -> str:
     if (
         not isinstance(value, str)
@@ -1222,6 +1242,47 @@ class CanaryJournal:
                 unknown_attempts=a["unknown_attempts"],
                 estimated_subtotal_usd=a["estimated_subtotal_usd"],
                 stopped=self.provider_stopped or self._run.state.stopped,
+            )
+
+    def driver_snapshot(self, binding: ProviderBinding) -> DriverSnapshot:
+        """Observe the bound active producer under its existing synchronisation.
+
+        Inspection/recovery remain unavailable while the producer owns its lock.
+        No record is appended and no saved producer can be reopened by this API.
+        """
+        with self._provider_checked(binding):
+            usage = []
+            for (slot, number), call in self._run.calls.items():
+                if call.get("sdk_outcome") == "returned" and call["complete"]:
+                    final = call["results"][call["dispatches"][-1]]
+                    usage.append(
+                        {
+                            "slot": slot,
+                            "logical_call": number,
+                            "response_id": final["response_id"],
+                            **{
+                                key: final[key]
+                                for key in (
+                                    "input_tokens",
+                                    "output_tokens",
+                                    "total_tokens",
+                                )
+                            },
+                        }
+                    )
+            return DriverSnapshot(
+                binding=deepcopy(binding),
+                decision=deepcopy(self._run.decision),
+                decision_sequence=self._run.decision_sequence,
+                active_slot=self._run.active,
+                stopped=self.provider_stopped
+                or self._run.state.stopped
+                or self._run.shutdown is not None
+                or self._run.sealed,
+                evidence=deepcopy(self._run.evidence),
+                accounting=deepcopy(self._run.accounting()),
+                turn_accounting={slot: self._run.accounting(slot) for slot in ORDER},
+                completed_call_usage=tuple(deepcopy(usage)),
             )
 
     def reserve_provider_call(
