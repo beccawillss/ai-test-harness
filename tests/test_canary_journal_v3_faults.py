@@ -512,6 +512,116 @@ def child(program, *arguments, **kwargs):
     )
 
 
+@pytest.mark.parametrize("operation", ["read", "inspect", "recover", "producer"])
+@pytest.mark.parametrize("position", ["manifest", "latest"])
+def test_fifo_substitution_is_rejected_without_blocking(tmp_path, operation, position):
+    program = """
+import os, stat, sys
+from pathlib import Path
+from harness.canary import journal_v3 as j
+from test_canary_journal_v3 import complete, make, ready, receipt, tree_bytes
+
+root, operation, position = Path(sys.argv[1]), sys.argv[2], sys.argv[3]
+binding, writer = make(root)
+if operation == 'producer':
+    writer.record_decision(ready())  # Regular-file integrity reads succeed first.
+else:
+    complete(writer)
+    assert j.inspect_run(binding, 'run-1')['status'] == 'completed'
+ledger = Path(binding.path) / 'runs/run-1/records'
+target = sorted(ledger.glob('*.json'))[0 if position == 'manifest' else -1]
+original = target.read_bytes()
+descriptor = os.open(ledger, os.O_RDONLY | os.O_DIRECTORY)
+try:
+    assert j._read(descriptor, target.name)['kind'] == (
+        'manifest' if position == 'manifest' else
+        'decision' if operation == 'producer' else 'completion_ack'
+    )
+    target.unlink()
+    os.mkfifo(target, 0o600)  # No FIFO writer will ever be connected.
+    target.chmod(0o600)
+    identity = target.lstat()
+    before = tree_bytes(Path(binding.path))  # Skips the FIFO; never opens it.
+    print('special-file-ready', flush=True)
+    if operation == 'read':
+        try:
+            j._read(descriptor, target.name)
+        except j.JournalError as error:
+            assert str(error) == 'invalid_record'
+        else:
+            raise AssertionError('special record accepted')
+    elif operation == 'producer':
+        try:
+            writer.stop()
+        except j.JournalError as error:
+            assert str(error) == 'journal_stopped_preserve_evidence'
+        else:
+            raise AssertionError('producer accepted substituted evidence')
+        try:
+            writer.stop()
+        except j.JournalError as error:
+            assert str(error) == 'journal_stopped_preserve_evidence'
+        else:
+            raise AssertionError('producer gate reopened')
+    report = (
+        j.recover_save_only(binding, 'run-1', root / 'export')
+        if operation == 'recover' else j.inspect_run(binding, 'run-1')
+    )
+    assert report['status'] == 'corrupt'
+    assert report['issues'] == ['corrupt_or_conflicting_evidence']
+    assert not report['completion_certified']
+    assert not report['completion_acknowledged']
+    assert not report['accounting_reconciled']
+    assert not report['authorises_live_execution']
+    assert tree_bytes(Path(binding.path)) == before
+    after = target.lstat()
+    assert stat.S_ISFIFO(after.st_mode)
+    assert (after.st_dev, after.st_ino, after.st_mode) == (
+        identity.st_dev, identity.st_ino, identity.st_mode
+    )
+    if operation == 'recover':
+        assert j.inspect_run(binding, 'run-1') == report
+    if operation == 'producer':
+        # Restore regular bytes only in this tampering test: closure must persist
+        # after the bad input is removed, and the run must remain single-use.
+        target.unlink()
+        target.write_bytes(original)
+        target.chmod(0o600)
+        try:
+            writer.record_decision(ready())
+        except j.JournalError:
+            pass
+        else:
+            raise AssertionError('restoring bytes reopened producer')
+        try:
+            j.CanaryJournal(binding, 'run-1', 'replacement', source_receipt=receipt())
+        except j.JournalError:
+            pass
+        else:
+            raise AssertionError('replacement producer reopened run')
+        assert not j.inspect_run(binding, 'run-1')['completion_certified']
+    print('special-file-rejected', flush=True)
+finally:
+    writer.close()
+    os.close(descriptor)
+"""
+    process = child(program, tmp_path, operation, position)
+    try:
+        try:
+            stdout, stderr = process.communicate(timeout=5)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            stdout, stderr = process.communicate(timeout=5)
+            assert "special-file-ready" in stdout, (stdout, stderr)
+            pytest.fail(f"FIFO {operation} blocked beyond five seconds")
+        assert process.returncode == 0, (stdout, stderr)
+        assert stdout.splitlines() == ["special-file-ready", "special-file-rejected"]
+    finally:
+        if process.poll() is None:
+            process.kill()
+            process.communicate(timeout=5)
+
+
 def test_concurrent_process_writer_and_duplicate_approval(tmp_path):
     binding = journal.initialize_registry(tmp_path / "v3")
     program = """

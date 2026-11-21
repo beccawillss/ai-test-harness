@@ -153,7 +153,10 @@ def _publish(directory: int, name: str, value: Any) -> None:
 
 def _read(directory: int, name: str) -> Any:
     try:
-        descriptor = os.open(name, os.O_RDONLY | os.O_NOFOLLOW, dir_fd=directory)
+        # Reach fstat without waiting for a writer on a substituted FIFO.
+        descriptor = os.open(
+            name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=directory
+        )
         with os.fdopen(descriptor, "rb") as stream:
             _private(os.fstat(stream.fileno()))
             raw = stream.read()

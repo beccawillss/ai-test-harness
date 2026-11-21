@@ -2,12 +2,12 @@
 
 Approved baseline: `a68b13ea2a09345a0ad3de1ce486679ddb00c375`.
 Worktree: `/private/tmp/ai-test-harness-canary-runtime-v3-slice2`.
-Branch: `feat/canary-runtime-v3-slice2`. PR #27's approved pre-correction head is
-`036fe6473ee625c48b239f2b52ba80504e25c818`. The latest human instruction authorises
-one additional commit, `Enforce canary spending pause at reservation boundaries`,
-and its push to this existing feature branch, followed by a PR description update.
-Only the journal, its two test modules and this plan may change; the six-file PR
-inventory must remain unchanged. Do not amend the published commit, merge, enable
+Branch: `feat/canary-runtime-v3-slice2`. Approved pre-FIFO-correction PR #27 head:
+`faa8b514f82ee6262a71c9a08f088d5129ee97e4`. Human QA now authorises one third commit,
+`Reject blocking special files during canary evidence inspection`, its push to the
+existing branch and a PR description update. Only the journal, its fault tests
+and this plan may change; preserve the six-file PR inventory. Keep the existing
+GitHub review thread open. Do not amend either published commit, merge, enable
 auto-merge, begin Slice 3 or run live operations. Earlier permission notes below
 describe their respective historical milestones.
 
@@ -593,3 +593,140 @@ with these safeguards and final totals. Verify the remote head/parent, exact
 four-file correction, six-file PR inventory, published blob identities,
 mergeability and CI status after publication. Stop for final human QA without
 merging, auto-merge, Slice 3, servers, provider requests, judging or Study execution.
+
+## PR #27 QA correction: nonblocking special-file inspection
+
+The spending correction is accepted. The initial investigation authorised local
+work only on the unresolved automated review finding at `_read`, with no commit,
+push or remote-thread mutation. Published HEAD stayed
+`faa8b514f82ee6262a71c9a08f088d5129ee97e4` during that investigation.
+
+Reviewed the existing [GitHub finding](https://github.com/beccawillss/ai-test-harness/pull/27#discussion_r4652597012),
+thread `PRRT_kwDOTj88Ls66WivM`, marked unresolved at the published head. It identifies
+an owner-private FIFO substituted for `000000.json`: the blocking read-only open
+waits for a writer before the later descriptor type check can reject it. That
+blocks inspection/recovery while holding the registry lock, and producer record
+integrity validation has the same vulnerability.
+
+- [x] Reproduce inspection, save-only recovery and producer validation in isolated
+  subprocesses with strict timeouts and bounded termination/reaping.
+- [x] Apply only nonblocking open flags; retain descriptor type/privacy validation,
+  symlink exclusion, canonical JSON, checksum and chain semantics.
+- [x] Test normal regular reads, fixed diagnostics, first/latest-record substitution,
+  withheld completion, immutable corrupt-source export and permanent producer closure.
+- [x] Re-run focused/full offline suites and static checks, verify protected files
+  and identities, then return the uncommitted diff for human QA.
+
+Before the fix, the three new manifest-substitution regressions all reached their
+`special-file-ready` marker, then exceeded their five-second timeout: **3 failed**
+in 16.43 seconds. The parent killed and reaped each isolated child, so pytest
+itself never performed a potentially blocking record open. No FIFO writer was
+connected. Inspection, save-only recovery and producer stop/integrity validation
+were separately reproduced against the unchanged published `_read`.
+
+The source correction adds `os.O_NONBLOCK` to the existing `os.O_RDONLY |
+os.O_NOFOLLOW` open. The existing `_private(os.fstat(stream.fileno()))` still checks
+the opened descriptor for regular type, owner and private permissions before
+`stream.read()`. Rejection closes the descriptor through the existing context
+manager and surfaces only fixed `invalid_record` diagnostics. No path-based type
+precheck replaces descriptor validation. Canonical JSON, duplicate-key validation,
+checksum comparison, record-chain validation and all state/decision rules remain
+unchanged. The source change consists only of the flag, formatting and an
+explanatory comment.
+
+Eight new subprocess regressions cover direct reads, inspection, save-only recovery
+and producer integrity validation at the manifest and latest-record boundaries.
+Each first proves normal committed records load. Read-only controls start from
+completed journals, including a final completion-ack substitution, and then require
+corrupt reports with no completion, reconciliation or authority. Corrupt-source
+regular bytes and FIFO identity/type/permissions stay unchanged by inspection or
+export. Producer failures must close the gate, including after test-only restoration
+of the original regular bytes; a replacement producer for the run remains rejected.
+Every child has a five-second `communicate` timeout, with kill/reap cleanup also
+bounded to five seconds. No unbounded `readline` or FIFO I/O runs in the parent.
+
+The fix addresses the review finding in substance locally. The GitHub thread and
+published implementation deliberately remain unchanged until human review and
+separate publication approval. Existing POSIX filesystem and unauthenticated
+supplied-evidence limitations remain; no new recovery or live authority is added.
+
+Final verification used the same stripped-environment commands documented above;
+the FIFO-only gate used `-k fifo_substitution`, and the pre-fix reproduction used
+`-k 'fifo_substitution and manifest and not read'`:
+
+| Check | Actual result |
+| --- | --- |
+| Pre-fix inspection/recovery/producer reproduction | **3 failed**, bounded FIFO timeouts, 16.43 seconds |
+| FIFO subprocess regressions after correction | **8 passed**, 6.04 seconds |
+| Complete journal/evidence/fault suites | **241 passed**, no skips, 41.94 seconds |
+| Existing canary/Study-journal/execution-control suites | **571 passed, 4 skipped**, 31.35 seconds |
+| Full locked offline suite | **3,250 passed, 4 skipped**, 187.88 seconds |
+| Ruff lint across src/tests | Passed |
+| Mypy | Passed, 58 source files |
+| Formatting, five Slice 2 Python files | Passed |
+| Repository-wide formatting | Only the same two unchanged baseline failures |
+| Git whitespace and scope checks | Passed |
+| Protected files and identities | All 198 approved-base files unchanged in bytes/modes |
+
+The full suites retain all sixteen spending-boundary regressions, historical
+500/500/200 retry behavior and all thirteen saved-replay tampering cases. Existing
+canonical JSON, checksum, predecessor/sequence, corrupted-record, symlink,
+crash/interruption and save-only export tests pass without changes. Independent
+AST comparison confirms all prior fault-test functions remain unchanged. Regular
+records remain readable before every FIFO substitution in the new tests.
+
+The listening-server controller module remains explicitly excluded, with the
+same four optional SDK/application skips. No SDK/application runtime, server,
+provider, judge or Study execution was invoked. No credentials or private operator
+evidence were accessed. Approved C1/v2.1/v3 fingerprints, source/application pins,
+fixture-hash bindings, locks and the 50-case Study dataset identity are unchanged.
+Actual application fixture bytes were not accessed.
+
+Only `journal_v3.py`, its existing fault-test module and this plan differ from
+published HEAD, within the same six-file Slice 2 PR scope. HEAD and index stay
+unchanged; no commit, push, merge, review-thread resolution or other GitHub write
+was performed. The remaining three Slice 2 files are unchanged.
+
+**Recommendation: the automated finding is resolved in substance in the local
+diff, ready for independent human QA.** The published head and unresolved GitHub
+thread still describe the original implementation until separate publication
+approval. This change addresses special-file open blocking; it does not broaden
+filesystem durability guarantees, authenticate evidence or add live authority.
+
+## Reviewed FIFO correction: authorised third commit
+
+Human QA accepted the local correction and authorised exactly one additional
+commit, `Reject blocking special files during canary evidence inspection`, with
+parent `faa8b514f82ee6262a71c9a08f088d5129ee97e4`. Preserve both earlier commits
+and the approved base `a68b13ea2a09345a0ad3de1ce486679ddb00c375`.
+Only `journal_v3.py`, `test_canary_journal_v3_faults.py` and this plan may change;
+the full PR must retain exactly the six approved additions.
+
+Pre-publication reruns passed: **241 journal/evidence/fault tests** in 41.51
+seconds and **3,250 full offline tests, four optional skips** in 186.13 seconds.
+These include all eight bounded FIFO cases, sixteen spending cases, historical
+500/500/200 retries and thirteen saved-replay tampering regressions. The
+listening-server controller module remains explicitly excluded; optional
+SDK/application checks remain skipped, without enabling those runtimes.
+
+Ruff lint, mypy (58 source files), formatting of all five Slice 2 Python files
+and whitespace checks passed. Repository-wide formatting still flags only the
+two untouched baseline files documented above. All 198 baseline files remain
+byte/mode identical, with approved fingerprints, C1 behavior, application/source
+pins, fixture-hash bindings, locks and Study data unchanged. Actual application
+fixtures, credentials and private operator evidence were not accessed.
+
+AST comparison proves the addition of `O_NONBLOCK` is the only executable source
+change; `O_NOFOLLOW`, descriptor validation before read, canonical JSON, checksum
+and record-chain logic are unchanged. Existing fault-test bodies are unchanged.
+The bounded subprocess checks prove rejection and permanent producer closure.
+
+Before publication GitHub showed only the existing unresolved FIFO finding.
+Keep thread `PRRT_kwDOTj88Ls66WivM` open for independent verification; do not post
+a resolution or trigger another review. After the exact three-file commit and
+push to the existing feature branch, update PR #27's description with the
+reproduction, correction, eight passing cases and final test totals. Verify the
+remote correction, six-file inventory, published bytes, mergeability, CI and
+additional review findings, then stop for final human QA. No merge, auto-merge,
+Slice 3, server, SDK execution, provider request, judging or Study execution is
+authorised.
