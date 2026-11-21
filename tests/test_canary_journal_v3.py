@@ -870,3 +870,234 @@ def test_operator_stop_blocks_an_otherwise_eligible_retry(tmp_path):
     with pytest.raises(journal.JournalError):
         writer.record_dispatch(1, 2)
     assert journal.inspect_run(binding, "run-1")["accounting"]["provider_attempts"] == 1
+
+
+def test_instrumentation_requires_explicit_exact_definition_and_is_deeply_frozen(
+    tmp_path,
+):
+    from pydantic import ValidationError
+    from test_canary_instrumentation_v3 import profiled
+
+    (tmp_path / "default").mkdir()
+    registry, writer = make(tmp_path / "default")
+    with pytest.raises(journal.JournalError):
+        writer.bind_provider(
+            resolve_definition(),
+            project_id="proj_synthetic",
+            organization_id="org_synthetic",
+        )
+    assert not journal.inspect_run(registry, "run-1")["authorises_live_execution"]
+    _, writer, binding = profiled(tmp_path / "explicit")
+    with pytest.raises(ValidationError):
+        binding.run_id = "changed"
+    with pytest.raises(ValidationError):
+        binding.definition.inference.model = "changed"
+    writer.close()
+
+
+@pytest.mark.parametrize(
+    "field,value",
+    [
+        ("run_id", "wrong"),
+        ("registry_id", "wrong"),
+        ("slot", "B1"),
+        ("logical_call", 2),
+        ("sequence", 0),
+        ("extra", "PRIVATE"),
+    ],
+)
+def test_instrumented_reservation_identity_is_checked_atomically(
+    tmp_path, field, value
+):
+    from test_canary_instrumentation_v3 import attempt_guards, profiled
+
+    from harness.canary.evidence_v3 import DispatchTelemetry
+
+    registry, writer, binding = profiled(tmp_path)
+    reservation = writer.reserve_provider_call(
+        binding, slot="A1", previous_response_id=None
+    )
+    guards = attempt_guards()
+    telemetry = DispatchTelemetry(
+        sdk_retry_count=0, started_at=guards.checked_at, guards=guards
+    )
+    with pytest.raises(journal.JournalError):
+        writer.dispatch_provider_attempt(
+            binding,
+            reservation.model_copy(update={field: value}),
+            1,
+            telemetry=telemetry,
+        )
+    assert writer.provider_stopped
+    report = journal.inspect_run(registry, "run-1")
+    assert report["accounting"]["provider_attempts"] == 0
+    assert "PRIVATE" not in str(report)
+
+
+@pytest.mark.parametrize(
+    "fault", ["duplicate", "fourth", "after_success", "orphan", "duplicate_result"]
+)
+def test_instrumentation_attempt_order_uses_original_journal_rules(tmp_path, fault):
+    from test_canary_instrumentation_v3 import attempt_guards, profiled
+
+    from harness.canary.evidence_v3 import DispatchTelemetry, ResultTelemetry
+
+    registry, writer, binding = profiled(tmp_path)
+    reservation = writer.reserve_provider_call(
+        binding, slot="A1", previous_response_id=None
+    )
+
+    def dispatch(attempt):
+        guards = attempt_guards()
+        writer.dispatch_provider_attempt(
+            binding,
+            reservation,
+            attempt,
+            telemetry=DispatchTelemetry(
+                sdk_retry_count=min(attempt - 1, 2),
+                started_at=guards.checked_at,
+                guards=guards,
+            ),
+        )
+
+    def result(attempt, *, succeeded=False):
+        writer.observe_provider_attempt(
+            binding,
+            reservation,
+            attempt,
+            envelope() if succeeded else retry_failure(known_zero_usage=True),
+            http_status=200 if succeeded else 500,
+            telemetry=ResultTelemetry(
+                duration_ms=1.0,
+                read_complete=True,
+                json_state="valid",
+                observed_http_status=200 if succeeded else 500,
+            ),
+        )
+
+    if fault == "orphan":
+        operation = lambda: result(1)
+    else:
+        for attempt in range(1, 4 if fault == "fourth" else 2):
+            dispatch(attempt)
+            result(attempt, succeeded=fault == "after_success")
+        operation = lambda: dispatch(
+            {"duplicate": 1, "fourth": 4, "after_success": 2, "duplicate_result": 1}[
+                fault
+            ]
+        )
+        if fault == "duplicate_result":
+            operation = lambda: result(1)
+    with pytest.raises(journal.JournalError):
+        operation()
+    assert writer.provider_stopped
+    assert journal.inspect_run(registry, "run-1")["accounting"][
+        "provider_attempts"
+    ] == (0 if fault == "orphan" else 3 if fault == "fourth" else 1)
+
+
+@pytest.mark.parametrize(
+    "legacy",
+    ["reserve_call", "record_dispatch", "record_provider_result", "complete_call"],
+)
+def test_profiled_journal_rejects_legacy_provider_records(tmp_path, legacy):
+    from test_canary_instrumentation_v3 import profiled
+
+    registry, writer, _ = profiled(tmp_path)
+    arguments = {
+        "reserve_call": (1,),
+        "record_dispatch": (1, 1),
+        "record_provider_result": (1, 1, envelope()),
+        "complete_call": (1,),
+    }
+    with pytest.raises(journal.JournalError):
+        getattr(writer, legacy)(*arguments[legacy])
+    assert not journal.inspect_run(registry, "run-1")["completion_certified"]
+
+
+def test_profile_is_opt_in_once_before_decisions_and_cannot_rebind(tmp_path):
+    from test_canary_instrumentation_v3 import profiled
+
+    (tmp_path / "late").mkdir()
+    registry, writer = make(tmp_path / "late")
+    writer.record_decision(ready())
+    with pytest.raises(journal.JournalError):
+        writer.bind_provider(
+            resolve_definition(V3),
+            project_id="proj_synthetic",
+            organization_id="org_synthetic",
+        )
+    assert "instrumentation_profile" not in journal.inspect_run(registry, "run-1")
+    registry, writer, _ = profiled(tmp_path / "twice")
+    with pytest.raises(journal.JournalError):
+        writer.bind_provider(
+            resolve_definition(V3),
+            project_id="proj_synthetic",
+            organization_id="org_synthetic",
+        )
+    assert (
+        journal.inspect_run(registry, "run-1")["instrumentation_profile"]
+        == "canary-provider-instrumentation-v1"
+    )
+
+
+@pytest.mark.parametrize("calls_per_turn,attempts_per_call", [(1, 1), (6, 3)])
+def test_instrumented_complete_roster_keeps_policy_and_save_only_semantics(
+    tmp_path, calls_per_turn, attempts_per_call
+):
+    from test_canary_instrumentation_v3 import (
+        app_request,
+        attempt_guards,
+        client_for,
+        profiled,
+    )
+
+    from harness.canary.instrumentation_v3 import ProviderTransportV3
+
+    registry, writer, binding = profiled(tmp_path, turn=False)
+    observed = []
+
+    def respond(request):
+        observed.append(request)
+        if len(observed) % attempts_per_call:
+            return httpx.Response(500, json=retry_failure(known_zero_usage=True))
+        raw = envelope()
+        raw["id"] = f"resp_{len(observed)}"
+        return httpx.Response(200, json=raw)
+
+    transport = ProviderTransportV3(
+        writer, binding, httpx.MockTransport(respond), guards=attempt_guards
+    )
+    client = client_for(transport, count=attempts_per_call)
+    for turn in binding.definition.turns:
+        decision = writer.record_decision(ready())
+        assert decision.next_slot == turn.slot
+        writer.reserve_turn(turn.slot)
+        previous = None
+        for _ in range(calls_per_turn):
+            previous = client.create_response(
+                app_request(input=turn.message, previous_response_id=previous)
+            ).response_id
+        raw = selected(turn.slot)
+        writer.record_chat(raw["chat"])
+        writer.record_trace(raw["trace"], reread=raw["trace"])
+        writer.assess_turn()
+        writer.complete_turn()
+    assert writer.record_decision(ready()).action == "COMPLETE"
+    transport.close()
+    writer.record_shutdown(
+        worker_stopped=True, sdk_closed=True, no_inflight_provider=True
+    )
+    writer.seal()
+    report = journal.inspect_run(registry, "run-1")
+    assert report["completion_certified"] and report["accounting_reconciled"]
+    assert report["accounting"]["logical_calls"] == 4 * calls_per_turn
+    assert (
+        report["accounting"]["provider_attempts"]
+        == len(observed)
+        == 4 * calls_per_turn * attempts_per_call
+    )
+    assert not report["source_authorised"] and not report["authorises_live_execution"]
+    before = tree_bytes(Path(registry.path))
+    assert journal.recover_save_only(registry, "run-1", tmp_path / "export") == report
+    assert tree_bytes(Path(registry.path)) == before

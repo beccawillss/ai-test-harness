@@ -882,3 +882,217 @@ print('offline-only')
     stdout, stderr = process.communicate(timeout=15)
     assert process.returncode == 0, stderr
     assert stdout.strip() == "offline-only"
+
+
+@pytest.mark.parametrize(
+    "boundary",
+    [
+        "instrumented_call_reserved",
+        "instrumented_dispatch",
+        "instrumented_result",
+        "instrumented_call_finished",
+    ],
+)
+@pytest.mark.parametrize("published", [False, True])
+def test_instrumented_publication_failure_closes_gate_and_preserves_prefix(
+    tmp_path, monkeypatch, boundary, published
+):
+    import httpx
+    from test_canary_instrumentation_v3 import (
+        app_request,
+        attempt_guards,
+        client_for,
+        profiled,
+        records,
+    )
+
+    from harness.canary.instrumentation_v3 import ProviderTransportV3
+    from harness.canary.recording import CanaryError
+
+    registry, writer, binding = profiled(tmp_path)
+    prior = tree_bytes(Path(registry.path))
+    original = journal._publish
+    forwarded = []
+
+    def publish(directory, name, value):
+        if value.get("kind") == boundary:
+            if published:
+                original(directory, name, value)
+            raise OSError("PRIVATE_PUBLICATION_ERROR")
+        original(directory, name, value)
+
+    transport = ProviderTransportV3(
+        writer,
+        binding,
+        httpx.MockTransport(
+            lambda r: forwarded.append(r) or httpx.Response(200, json=envelope())
+        ),
+        guards=attempt_guards,
+    )
+    with monkeypatch.context() as patch:
+        patch.setattr(journal, "_publish", publish)
+        with pytest.raises(CanaryError):
+            client_for(transport).create_response(app_request())
+    assert writer.provider_stopped and transport.stopped
+    with pytest.raises(CanaryError):
+        client_for(transport).create_response(app_request())
+    after = tree_bytes(Path(registry.path))
+    assert all(after[name] == content for name, content in prior.items())
+    assert len(forwarded) == (
+        0 if boundary in {"instrumented_call_reserved", "instrumented_dispatch"} else 1
+    )
+    writer.close()
+    report = journal.inspect_run(registry, "run-1")
+    assert not report["completion_certified"]
+    assert "PRIVATE" not in str(report)
+    if boundary == "instrumented_result":
+        assert len(records(report, boundary)) == int(published)
+        assert report["accounting"]["unknown_attempts"] == (0 if published else 1)
+        assert report["dispatch_available"] is False
+        assert not report["instrumentation_terminal_stop_recorded"]
+    with pytest.raises(journal.JournalError):
+        journal.CanaryJournal(
+            registry, "run-1", "new-approval", source_receipt=receipt()
+        )
+
+
+@pytest.mark.parametrize(
+    "fault",
+    [
+        "missing_profile",
+        "wrong_profile",
+        "mixed_legacy",
+        "retry_count",
+        "guard",
+        "partial_completion",
+        "response_identity",
+        "extra_authority",
+        "wrong_run",
+        "wrong_result_profile",
+    ],
+)
+def test_rechained_instrumentation_history_rejects_profile_and_semantic_forgery(
+    tmp_path, fault
+):
+    import httpx
+    from test_canary_instrumentation_v3 import (
+        app_request,
+        attempt_guards,
+        client_for,
+        profiled,
+    )
+
+    from harness.canary.instrumentation_v3 import ProviderTransportV3
+
+    registry, writer, binding = profiled(tmp_path)
+    transport = ProviderTransportV3(
+        writer,
+        binding,
+        httpx.MockTransport(lambda _: httpx.Response(200, json=envelope())),
+        guards=attempt_guards,
+    )
+    client_for(transport).create_response(app_request())
+    writer.close()
+    history = journal.inspect_run(registry, "run-1")["records"]
+    kinds = {r["kind"]: r["payload"] for r in history}
+    if fault == "missing_profile":
+        history.pop(1)
+    elif fault == "wrong_profile":
+        kinds["instrumentation_profile"]["profile"] = "PRIVATE_PROFILE"
+    elif fault == "mixed_legacy":
+        record = next(r for r in history if r["kind"] == "instrumented_dispatch")
+        record["kind"] = "provider_dispatch"
+        record["payload"] = {"slot": "A1", "logical_call": 1, "attempt": 1}
+    elif fault == "retry_count":
+        kinds["instrumented_dispatch"]["telemetry"]["sdk_retry_count"] = 2
+    elif fault == "guard":
+        kinds["instrumented_dispatch"]["telemetry"]["guards"]["privacy_ok"] = False
+    elif fault == "partial_completion":
+        kinds["instrumented_result"]["telemetry"].update(
+            read_complete=False, json_state="unavailable"
+        )
+    elif fault == "response_identity":
+        kinds["instrumented_call_finished"]["response_id"] = "resp_conflict"
+    elif fault == "extra_authority":
+        kinds["instrumented_call_finished"]["authorises_live_execution"] = True
+    elif fault == "wrong_run":
+        kinds["instrumented_result"]["reservation"]["run_id"] = "wrong-run"
+    else:
+        kinds["instrumented_result"]["profile"] = "other-profile"
+    ledger = Path(registry.path) / "runs/run-1/records"
+    replace_saved_history(ledger, history)
+    before = tree_bytes(Path(registry.path))
+    report = journal.inspect_run(registry, "run-1")
+    assert report["status"] == "corrupt" and not report["completion_certified"]
+    assert (
+        not report["accounting_reconciled"]
+        and not report["provider_evidence_authenticated"]
+    )
+    assert "PRIVATE_PROFILE" not in str(report)
+    journal.recover_save_only(registry, "run-1", tmp_path / "export")
+    assert tree_bytes(Path(registry.path)) == before
+
+
+def test_sigkill_after_instrumented_intent_retains_unknown_billing_and_claims(tmp_path):
+    registry = journal.initialize_registry(tmp_path / "v3")
+    program = """
+import sys
+from pathlib import Path
+from test_canary_journal_v3 import receipt, ready
+from test_canary_instrumentation_v3 import attempt_guards
+from harness.canary.journal_v3 import CanaryJournal, load_registry
+from harness.canary.runtime_v3 import resolve_definition, V3
+from harness.canary.evidence_v3 import DispatchTelemetry
+w = CanaryJournal(load_registry(Path(sys.argv[1])), 'killed', 'approval', source_receipt=receipt())
+b = w.bind_provider(resolve_definition(V3), project_id='proj_synthetic', organization_id='org_synthetic')
+w.record_decision(ready())
+w.reserve_turn('A1')
+r = w.reserve_provider_call(b, slot='A1', previous_response_id=None)
+g = attempt_guards()
+w.dispatch_provider_attempt(b, r, 1, telemetry=DispatchTelemetry(sdk_retry_count=0, started_at=g.checked_at, guards=g))
+print('inflight', flush=True)
+sys.stdin.readline()
+"""
+    process = child(program, registry.path)
+    try:
+        assert process.stdout.readline().strip() == "inflight"
+        process.kill()
+        process.communicate(timeout=10)
+    finally:
+        if process.poll() is None:
+            process.kill()
+            process.communicate(timeout=10)
+    report = journal.inspect_run(registry, "killed")
+    assert report["accounting"]["unknown_attempts"] == 1
+    assert report["status"] == "operationally_uncertain"
+    with pytest.raises(journal.JournalError):
+        journal.CanaryJournal(
+            registry, "killed", "new-approval", source_receipt=receipt()
+        )
+
+
+def test_instrumentation_import_has_no_credentials_sdk_or_socket_activity(tmp_path):
+    program = """
+import sys, os
+def guard(event, args):
+    if event.startswith('socket.'):
+        raise AssertionError('socket activity')
+    if event == 'import' and args[0].split('.')[0] in ('openai', 'salesagent', 'uvicorn'):
+        raise AssertionError('external construction')
+sys.addaudithook(guard)
+class Environment(dict):
+    def get(self, key, default=None):
+        if key.startswith(('OPENAI_', 'SALESAGENT_')): raise AssertionError('credential read')
+        return super().get(key, default)
+    def __getitem__(self, key):
+        if key.startswith(('OPENAI_', 'SALESAGENT_')): raise AssertionError('credential read')
+        return super().__getitem__(key)
+os.environ = Environment(os.environ)
+from harness.canary.instrumentation_v3 import ProviderTransportV3, BoundedResponsesClientV3
+assert not hasattr(ProviderTransportV3, 'run_judge')
+print('mock-only')
+"""
+    process = child(program)
+    stdout, stderr = process.communicate(timeout=15)
+    assert process.returncode == 0, stderr
+    assert stdout.strip() == "mock-only"

@@ -6,11 +6,17 @@ Provider observations are supplied scalars, not independently authenticated even
 
 from __future__ import annotations
 
+import math
 import re
-from typing import Any
+from datetime import datetime
+from email.utils import parsedate_to_datetime
+from typing import Any, Literal
+
+from pydantic import Field
 
 from harness.canary.inputs import TARGET_MODEL
 from harness.canary.recording import usage_metadata
+from harness.canary.runtime_v3 import Frozen, _plain
 from harness.canary.selection_acceptance import NOMINATION_FAILURES, PROMOTION_FAILURES
 from harness.core.fingerprints import canonical_json
 from harness.targets._salesagent_contract import (
@@ -25,6 +31,141 @@ from harness.targets._salesagent_contract import (
 
 class EvidenceProjectionError(ValueError):
     """Fixed diagnostics only; suppress external validation details."""
+
+
+INSTRUMENTATION_PROFILE = "canary-provider-instrumentation-v1"
+PROVIDER_FAILURES = frozenset(
+    {
+        "delegate_error",
+        "response_identity_mismatch",
+        "provider_error",
+        "unknown_usage",
+        "spending_pause",
+        "operator_stop",
+        "operator_pause",
+        "interrupted",
+        "request_invalid",
+        "guard_failed",
+        "concurrency_error",
+        "recording_failed",
+        "transport_ambiguous",
+        "cleanup_failed",
+    }
+)
+
+
+class AttemptGuards(Frozen):
+    """Supplied mock-run facts, never authenticated approval or live authority."""
+
+    checked_at: str
+    valid_for_seconds: int = Field(default=30, ge=1, le=60)
+    infrastructure_ok: bool = False
+    safety_ok: bool = False
+    privacy_ok: bool = False
+    project_controls_verified: bool = False
+    spending_headroom_verified: bool = False
+    source_and_fixtures_verified: bool = False
+    configuration_verified: bool = False
+    evidence_fresh: bool = False
+    operator_allows_dispatch: bool = False
+    exclusive_reservations_verified: bool = False
+    external_unknown_attempts: int = Field(default=0, ge=0)
+    estimated_total_usd: str = Field(default="0", pattern=r"^[0-9]+(?:\.[0-9]+)?$")
+
+
+class DispatchTelemetry(Frozen):
+    sdk_retry_count: int = Field(ge=0, le=2)
+    started_at: str
+    guards: AttemptGuards
+
+
+class ResultTelemetry(Frozen):
+    duration_ms: float = Field(ge=0, allow_inf_nan=False)
+    read_complete: bool
+    json_state: Literal["valid", "invalid", "unavailable"]
+    observed_http_status: int | None = Field(default=None, ge=100, le=599)
+    retry_after_state: Literal["absent", "seconds", "date", "invalid"] = "absent"
+    retry_after_seconds: float | None = Field(default=None, allow_inf_nan=False)
+    retry_after_ms_state: Literal["absent", "valid", "invalid"] = "absent"
+    retry_after_ms: float | None = Field(default=None, allow_inf_nan=False)
+
+
+def checked_telemetry(model: type[Frozen], value: object) -> Any:
+    """Revalidate copied/constructed models, suppressing all external diagnostics."""
+    try:
+        return model.model_validate(_plain(value))
+    except Exception:  # noqa: BLE001 - safe projection boundary
+        raise EvidenceProjectionError("invalid_instrumentation_telemetry") from None
+
+
+def validate_dispatch(
+    value: object, *, now: datetime | None = None
+) -> DispatchTelemetry:
+    try:
+        data = checked_telemetry(DispatchTelemetry, value)
+        started = datetime.fromisoformat(data.started_at)
+        checked = datetime.fromisoformat(data.guards.checked_at)
+        if started.utcoffset() is None or checked.utcoffset() is None:
+            raise ValueError
+        reference = started if now is None else now
+        age = (reference - checked).total_seconds()
+        if not 0 <= age <= data.guards.valid_for_seconds:
+            raise ValueError
+        if now is not None and not 0 <= (now - started).total_seconds() <= 60:
+            raise ValueError
+        for item in vars(data.guards).values():
+            if type(item) is bool and item is not True:
+                raise ValueError
+        if data.guards.external_unknown_attempts:
+            raise ValueError
+        return data
+    except Exception:  # noqa: BLE001 - no caller payload in diagnostics
+        raise EvidenceProjectionError("invalid_or_stale_attempt_guards") from None
+
+
+def validate_result(value: object) -> ResultTelemetry:
+    data = checked_telemetry(ResultTelemetry, value)
+    if (
+        (data.read_complete != (data.json_state != "unavailable"))
+        or (data.read_complete and data.observed_http_status is None)
+        or (data.retry_after_state in {"seconds", "date"})
+        != (data.retry_after_seconds is not None)
+        or (data.retry_after_ms_state == "valid") != (data.retry_after_ms is not None)
+    ):
+        raise EvidenceProjectionError("inconsistent_result_telemetry")
+    return data
+
+
+def retry_header_telemetry(headers: Any) -> dict[str, Any]:
+    """Retain numeric/date meaning only, never arbitrary header text."""
+    result: dict[str, Any] = {}
+    for header, key in (
+        ("retry-after", "retry_after"),
+        ("retry-after-ms", "retry_after_ms"),
+    ):
+        raw = headers.get(header)
+        state, number = "absent", None
+        if raw is not None:
+            state = "invalid"
+            try:
+                number = float(raw)
+                if not math.isfinite(number):
+                    raise ValueError
+                state = "seconds" if key == "retry_after" else "valid"
+            except (ValueError, TypeError, OverflowError):
+                number = None
+                if key == "retry_after":
+                    try:
+                        date = parsedate_to_datetime(raw)
+                        if date.utcoffset() is None:
+                            raise ValueError
+                        number = date.timestamp()
+                        state = "date"
+                    except (ValueError, TypeError, OverflowError):
+                        pass
+        result[key + "_state"] = state
+        result["retry_after_seconds" if key == "retry_after" else key] = number
+    return result
 
 
 # Same billing exclusions as the frozen historical transport. Unknown codes/types
