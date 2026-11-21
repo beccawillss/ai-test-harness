@@ -12,22 +12,29 @@ import os
 import re
 import stat
 import threading
-from contextlib import suppress
+from collections.abc import Iterator
+from contextlib import contextmanager, suppress
 from copy import deepcopy
 from dataclasses import asdict, dataclass, field, replace
 from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
-from typing import Any, Self
+from typing import Any, Literal, Self
 from uuid import uuid4
 
+from pydantic import Field
+
 from harness.canary.evidence_v3 import (
+    INSTRUMENTATION_PROFILE,
+    PROVIDER_FAILURES,
     EvidenceProjectionError,
     project_chat,
     project_trace,
     provider_observation,
     restore_trace,
+    validate_dispatch,
     validate_observation,
+    validate_result,
 )
 from harness.canary.execution_policy import (
     Decision,
@@ -39,7 +46,10 @@ from harness.canary.execution_policy import (
 )
 from harness.canary.runtime_v3 import (
     V3,
+    DefinitionBinding,
+    Digest,
     Frozen,
+    _plain,
     parse_receipt,
     validate_binding,
 )
@@ -64,6 +74,35 @@ class RegistryBinding(Frozen):
     runs_inode: int
     approvals_inode: int
     lock_inode: int
+
+
+class ProviderBinding(Frozen):
+    definition: DefinitionBinding
+    registry_id: str
+    run_id: str
+    source_receipt_sha256: Digest
+    project_id: str = Field(pattern=r"^proj_[A-Za-z0-9_-]{1,120}$")
+    organization_id: str = Field(pattern=r"^org[-_][A-Za-z0-9_-]{1,120}$")
+    transport_kind: Literal["mock"] = "mock"
+
+
+class CallReservation(Frozen):
+    binding_sha256: Digest
+    registry_id: str
+    run_id: str
+    slot: str
+    logical_call: int = Field(ge=1, le=6)
+    sequence: int = Field(ge=0)
+
+
+class ProviderSnapshot(Frozen):
+    active_slot: str | None
+    next_logical_call: int
+    logical_calls: int
+    provider_attempts: int
+    unknown_attempts: int
+    estimated_subtotal_usd: str
+    stopped: bool
 
 
 def _identifier(value: str) -> str:
@@ -300,6 +339,8 @@ class _Run:
     shutdown: dict[str, bool] | None = None
     completion_sequence: int | None = None
     sealed: bool = False
+    provider_profile: dict[str, Any] | None = None
+    provider_stop: str | None = None
 
     def bundle_digest(self) -> str:
         return fingerprint({"evidence": self.evidence, "assessments": self.assessments})
@@ -331,6 +372,7 @@ class _Run:
                 r["outcome"] in {"operational_error", "ambiguous_transport"}
                 for r in results
             )
+            + sum(c.get("sdk_outcome") == "error" for c in calls)
             + sum(
                 c["complete"]
                 and c["results"][c["dispatches"][-1]]["outcome"]
@@ -415,7 +457,172 @@ def _reconciled(run: _Run) -> bool:
     )
 
 
-def _apply(run: _Run, kind: str, p: dict[str, Any], sequence: int) -> None:
+def _apply_instrumentation(
+    run: _Run, kind: str, p: dict[str, Any], sequence: int
+) -> None:
+    """Opt-in extension. Reuse legacy transitions without allowing mixed records."""
+    expected: dict[str, Any]
+    if kind == "instrumentation_profile":
+        if sequence != 1 or run.provider_profile is not None or run.manifest is None:
+            raise JournalError("invalid_instrumentation_boundary")
+        binding = ProviderBinding.model_validate_json(canonical_json(p["binding"]))
+        validate_binding(binding.definition)
+        receipt = parse_receipt(canonical_json(run.manifest["source_receipt"]))
+        if (
+            binding.definition.identifier != V3
+            or binding.definition != receipt.binding
+            or binding.run_id != run.manifest["run_id"]
+            or binding.registry_id != run.manifest["registry"]["registry_id"]
+            or binding.source_receipt_sha256 != run.manifest["source_receipt_sha256"]
+        ):
+            raise JournalError("provider_binding_differs")
+        expected = {
+            "profile": INSTRUMENTATION_PROFILE,
+            "binding": binding.model_dump(mode="json"),
+            "source_authorised": False,
+            "provider_evidence_authenticated": False,
+            "authorises_live_execution": False,
+        }
+        run.provider_profile = expected
+    else:
+        if run.provider_profile is None or p["profile"] != INSTRUMENTATION_PROFILE:
+            raise JournalError("instrumentation_profile_required")
+        expected = {"profile": INSTRUMENTATION_PROFILE}
+        if kind == "instrumentation_stop":
+            if run.provider_stop is not None or p["code"] not in PROVIDER_FAILURES:
+                raise JournalError("invalid_instrumentation_stop")
+            expected["code"] = p["code"]
+            run.provider_stop = p["code"]
+            if not any(c.get("sdk_outcome") is None for c in run.calls.values()):
+                run.state = replace(run.state, stopped=True, stop_reasons=(p["code"],))
+        else:
+            reservation = CallReservation.model_validate(p["reservation"])
+            binding = run.provider_profile["binding"]
+            if (
+                reservation.binding_sha256 != fingerprint(binding)
+                or reservation.run_id != binding["run_id"]
+                or reservation.registry_id != binding["registry_id"]
+                or reservation.slot != run.active
+                or run.shutdown is not None
+                or run.state.stopped
+            ):
+                raise JournalError("provider_reservation_differs")
+            key = (reservation.slot, reservation.logical_call)
+            base: dict[str, Any] = {
+                "slot": reservation.slot,
+                "logical_call": reservation.logical_call,
+            }
+            expected["reservation"] = reservation.model_dump(mode="json")
+            if kind == "instrumented_call_reserved":
+                if run.provider_stop or reservation.sequence != sequence:
+                    raise JournalError("provider_stopped_or_stale_reservation")
+                previous = p["previous_response_id"]
+                prior = run.calls.get((reservation.slot, reservation.logical_call - 1))
+                required = None if prior is None else prior["application_response_id"]
+                if previous != required:
+                    raise JournalError("provider_continuation_differs")
+                if run.accounting()["logical_calls"] >= LIMITS.logical_calls_total:
+                    raise JournalError("logical_call_ceiling")
+                _apply(run, "call_reserved", base, sequence, _profiled=True)
+                run.calls[key]["reservation"] = expected["reservation"]
+                run.calls[key]["previous_response_id"] = previous
+                expected["previous_response_id"] = previous
+            else:
+                call = run.calls[key]
+                if (
+                    call.get("reservation") != expected["reservation"]
+                    or call.get("sdk_outcome") is not None
+                ):
+                    raise JournalError("stale_or_finished_provider_call")
+                if kind == "instrumented_call_finished":
+                    outcome, failure, response_id = (
+                        p["outcome"],
+                        p["failure"],
+                        p["response_id"],
+                    )
+                    if response_id is not None and (
+                        not isinstance(response_id, str)
+                        or not re.fullmatch(r"resp_[A-Za-z0-9_-]{1,120}", response_id)
+                    ):
+                        raise JournalError("invalid_application_response_id")
+                    if outcome == "returned":
+                        final = call["results"].get(len(call["dispatches"]), {})
+                        if (
+                            failure is not None
+                            or response_id is None
+                            or final.get("outcome") != "completed"
+                            or final.get("response_id") != response_id
+                            or run.provider_stop
+                        ):
+                            raise JournalError("provider_completion_differs")
+                        _apply(run, "call_completed", base, sequence, _profiled=True)
+                    elif outcome == "error" and failure in PROVIDER_FAILURES:
+                        call["complete"] = len(call["results"]) == len(
+                            call["dispatches"]
+                        )
+                    else:
+                        raise JournalError("invalid_provider_call_outcome")
+                    call["sdk_outcome"] = outcome
+                    call["application_response_id"] = response_id
+                    call["failure"] = failure
+                    expected.update(
+                        outcome=outcome, response_id=response_id, failure=failure
+                    )
+                    if outcome == "error" or run.provider_stop:
+                        code = run.provider_stop or failure
+                        run.state = replace(
+                            run.state, stopped=True, stop_reasons=(code,)
+                        )
+                elif kind in {"instrumented_dispatch", "instrumented_result"}:
+                    attempt = p["attempt"]
+                    base["attempt"] = attempt
+                    expected["attempt"] = attempt
+                    telemetry: Any
+                    if kind == "instrumented_dispatch":
+                        telemetry = validate_dispatch(p["telemetry"])
+                        if (
+                            run.provider_stop
+                            or telemetry.sdk_retry_count != attempt - 1
+                            or Decimal(telemetry.guards.estimated_total_usd)
+                            >= Decimal(LIMITS.estimated_pause_usd)
+                            or run.accounting()["provider_attempts"]
+                            >= LIMITS.provider_attempts_total
+                        ):
+                            raise JournalError("provider_dispatch_denied")
+                        _apply(run, "provider_dispatch", base, sequence, _profiled=True)
+                    else:
+                        telemetry = validate_result(p["telemetry"])
+                        observation = p["observation"]
+                        if (
+                            (
+                                telemetry.read_complete
+                                and telemetry.observed_http_status
+                                != observation["http_status"]
+                            )
+                            or (
+                                not telemetry.read_complete
+                                and observation["outcome"] != "ambiguous_transport"
+                            )
+                            or (
+                                telemetry.json_state != "valid"
+                                and observation["outcome"]
+                                not in {"operational_error", "ambiguous_transport"}
+                            )
+                        ):
+                            raise JournalError("provider_completion_evidence_differs")
+                        base["observation"] = observation
+                        _apply(run, "provider_result", base, sequence, _profiled=True)
+                        expected["observation"] = observation
+                    expected["telemetry"] = telemetry.model_dump(mode="json")
+                else:
+                    raise JournalError("unknown_instrumentation_record")
+    if canonical_json(p) != canonical_json(expected):
+        raise JournalError("instrumentation_fields_differ")
+
+
+def _apply(
+    run: _Run, kind: str, p: dict[str, Any], sequence: int, *, _profiled: bool = False
+) -> None:
     """Validate this fixed canary record sequence, including persisted policy results."""
     expected: dict[str, Any]
     if (
@@ -424,6 +631,22 @@ def _apply(run: _Run, kind: str, p: dict[str, Any], sequence: int) -> None:
         or (run.manifest is None and kind != "manifest")
     ):
         raise JournalError("invalid_transition")
+    if kind.startswith(("instrumented_", "instrumentation_")):
+        _apply_instrumentation(run, kind, p, sequence)
+        return
+    if (
+        run.provider_profile
+        and not _profiled
+        and kind
+        in {
+            "call_reserved",
+            "provider_dispatch",
+            "provider_result",
+            "call_completed",
+            "stop",
+        }
+    ):
+        raise JournalError("mixed_instrumentation_profile")
     if kind == "manifest":
         receipt = parse_receipt(canonical_json(p["source_receipt"]))
         validate_binding(receipt.binding)
@@ -780,6 +1003,7 @@ class CanaryJournal:
         if receipt.binding.identifier != V3:
             raise JournalError("explicit_v3_required")
         self._mutex = threading.RLock()
+        self._provider_gate = threading.Event()
         self._pid = os.getpid()
         self._writer: int | None = _lock(registry, exclusive=True)
         self._ledger: int | None = None
@@ -841,6 +1065,7 @@ class CanaryJournal:
                 os.close(descriptor)
 
     def close(self) -> None:
+        self._provider_gate.set()
         for name in ("_ledger", "_writer"):
             descriptor = getattr(self, name, None)
             setattr(self, name, None)
@@ -925,6 +1150,196 @@ class CanaryJournal:
             except BaseException:  # noqa: BLE001 - interruptions must close recording gates
                 self.close()
                 raise JournalError("journal_stopped_preserve_evidence") from None
+
+    @property
+    def provider_stopped(self) -> bool:
+        """Permanent local dispatch latch. Reading it never inspects credentials."""
+        return self._provider_gate.is_set()
+
+    @contextmanager
+    def _provider_checked(self, binding: ProviderBinding) -> Iterator[None]:
+        with self._mutex:
+            try:
+                checked = ProviderBinding.model_validate(_plain(binding))
+                validate_binding(checked.definition)
+                if (
+                    self._writer is None
+                    or self._pid != os.getpid()
+                    or self._run.provider_profile is None
+                    or checked.model_dump(mode="json")
+                    != self._run.provider_profile["binding"]
+                ):
+                    raise JournalError("provider_binding_unavailable")
+                yield
+            except BaseException:  # noqa: BLE001 - every rejected boundary closes dispatch
+                self.close()
+                raise JournalError(
+                    "provider_boundary_stopped_preserve_evidence"
+                ) from None
+
+    def bind_provider(
+        self, definition: DefinitionBinding, *, project_id: str, organization_id: str
+    ) -> ProviderBinding:
+        """Opt in once, before decisions; claims remain unauthenticated and mock-only."""
+        with self._mutex:
+            try:
+                validate_binding(definition)
+                manifest = self._run.manifest
+                if manifest is None:
+                    raise JournalError("manifest_unavailable")
+                binding = ProviderBinding(
+                    definition=definition,
+                    registry_id=self.registry.registry_id,
+                    run_id=self.run_id,
+                    source_receipt_sha256=manifest["source_receipt_sha256"],
+                    project_id=project_id,
+                    organization_id=organization_id,
+                )
+                self._record(
+                    "instrumentation_profile",
+                    {
+                        "profile": INSTRUMENTATION_PROFILE,
+                        "binding": binding.model_dump(mode="json"),
+                        "source_authorised": False,
+                        "provider_evidence_authenticated": False,
+                        "authorises_live_execution": False,
+                    },
+                )
+                return binding
+            except BaseException:  # noqa: BLE001 - safe immutable binding boundary
+                self.close()
+                raise JournalError("provider_binding_rejected") from None
+
+    def provider_snapshot(self, binding: ProviderBinding) -> ProviderSnapshot:
+        with self._provider_checked(binding):
+            a = self._run.accounting()
+            return ProviderSnapshot(
+                active_slot=self._run.active,
+                logical_calls=a["logical_calls"],
+                next_logical_call=1
+                + sum(s == self._run.active for s, _ in self._run.calls),
+                provider_attempts=a["provider_attempts"],
+                unknown_attempts=a["unknown_attempts"],
+                estimated_subtotal_usd=a["estimated_subtotal_usd"],
+                stopped=self.provider_stopped or self._run.state.stopped,
+            )
+
+    def reserve_provider_call(
+        self, binding: ProviderBinding, *, slot: str, previous_response_id: str | None
+    ) -> CallReservation:
+        with self._provider_checked(binding):
+            if self.provider_stopped or slot != self._run.active:
+                raise JournalError("provider_dispatch_stopped")
+            token = CallReservation(
+                binding_sha256=fingerprint(binding.model_dump(mode="json")),
+                registry_id=binding.registry_id,
+                run_id=binding.run_id,
+                slot=slot,
+                logical_call=1 + sum(s == slot for s, _ in self._run.calls),
+                sequence=len(self._records),
+            )
+            self._record(
+                "instrumented_call_reserved",
+                {
+                    "profile": INSTRUMENTATION_PROFILE,
+                    "reservation": token.model_dump(mode="json"),
+                    "previous_response_id": previous_response_id,
+                },
+            )
+            return token
+
+    def dispatch_provider_attempt(
+        self,
+        binding: ProviderBinding,
+        reservation: CallReservation,
+        attempt: int,
+        *,
+        telemetry: object,
+    ) -> None:
+        with self._provider_checked(binding):
+            if self.provider_stopped:
+                raise JournalError("provider_dispatch_stopped")
+            safe = validate_dispatch(telemetry, now=datetime.now(UTC))
+            self._record(
+                "instrumented_dispatch",
+                {
+                    "profile": INSTRUMENTATION_PROFILE,
+                    "reservation": _plain(reservation),
+                    "attempt": attempt,
+                    "telemetry": safe.model_dump(mode="json"),
+                },
+            )
+
+    def observe_provider_attempt(
+        self,
+        binding: ProviderBinding,
+        reservation: CallReservation,
+        attempt: int,
+        envelope: object,
+        *,
+        telemetry: object,
+        http_status: int | None = None,
+        request_id: str | None = None,
+        should_retry_header: object = None,
+    ) -> dict[str, Any]:
+        """Record a returning result even after the dispatch latch was closed."""
+        with self._provider_checked(binding):
+            safe = validate_result(telemetry)
+            observation = provider_observation(
+                envelope,
+                http_status=http_status,
+                request_id=request_id,
+                should_retry_header=should_retry_header,
+            )
+            self._record(
+                "instrumented_result",
+                {
+                    "profile": INSTRUMENTATION_PROFILE,
+                    "reservation": _plain(reservation),
+                    "attempt": attempt,
+                    "observation": observation,
+                    "telemetry": safe.model_dump(mode="json"),
+                },
+            )
+            return deepcopy(observation)
+
+    def finish_provider_call(
+        self,
+        binding: ProviderBinding,
+        reservation: CallReservation,
+        *,
+        outcome: Literal["returned", "error"],
+        response_id: str | None = None,
+        failure: str | None = None,
+    ) -> None:
+        with self._provider_checked(binding):
+            self._record(
+                "instrumented_call_finished",
+                {
+                    "profile": INSTRUMENTATION_PROFILE,
+                    "reservation": _plain(reservation),
+                    "outcome": outcome,
+                    "response_id": response_id,
+                    "failure": failure,
+                },
+            )
+            if self._run.state.stopped:
+                self._provider_gate.set()
+
+    def request_provider_stop(self, binding: ProviderBinding, code: str) -> None:
+        """Close immediately; preserve an active call's right to record its result."""
+        self._provider_gate.set()
+        with self._provider_checked(binding):
+            if code not in PROVIDER_FAILURES:
+                raise JournalError("invalid_provider_stop")
+            if self._run.provider_stop is None:
+                self._record(
+                    "instrumentation_stop",
+                    {
+                        "profile": INSTRUMENTATION_PROFILE,
+                        "code": code,
+                    },
+                )
 
     def record_decision(self, guards: OperationalGuards) -> Decision:
         try:
@@ -1074,6 +1489,22 @@ class CanaryJournal:
         )
 
     def stop(self, code: str = "operator_stop") -> None:
+        self._provider_gate.set()  # Close dispatch before waiting for journal I/O.
+        with self._mutex:
+            if self._run.provider_profile is not None:
+                mapped = {
+                    "operator_stop": "operator_stop",
+                    "interrupted": "interrupted",
+                    "operational_error": "provider_error",
+                }
+                if code not in mapped:
+                    self.close()
+                    raise JournalError("invalid_stop_code")
+                binding = ProviderBinding.model_validate_json(
+                    canonical_json(self._run.provider_profile["binding"])
+                )
+                self.request_provider_stop(binding, mapped[code])
+                return
         self._record("stop", {"code": code})
 
     def record_shutdown(
@@ -1111,7 +1542,8 @@ def _report(binding: RegistryBinding, run_id: str) -> dict[str, Any]:
     run, records, issues, pending = _scan(binding, run_id)
     a = run.accounting()
     uncertain = bool(
-        a["unknown_attempts"]
+        run.provider_stop is not None
+        or a["unknown_attempts"]
         or a["incomplete_calls"]
         or a["operational_errors"]
         or run.active is not None
@@ -1157,6 +1589,19 @@ def _report(binding: RegistryBinding, run_id: str) -> dict[str, Any]:
         "provider_evidence_authenticated": False,
         "authorises_live_execution": False,
         "records": records,
+        **(
+            {
+                "instrumentation_profile": INSTRUMENTATION_PROFILE,
+                "instrumentation_stop": run.provider_stop,
+                "instrumentation_terminal_stop_recorded": run.provider_stop is not None
+                or run.state.stopped,
+                # Inspection holds a stable snapshot with no active producer.
+                # No saved run can be reopened, including one with no stop marker.
+                "dispatch_available": False,
+            }
+            if run.provider_profile
+            else {}
+        ),
     }
 
 

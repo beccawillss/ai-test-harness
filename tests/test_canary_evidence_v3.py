@@ -322,3 +322,88 @@ def test_missing_http_completion_remains_ambiguous_despite_retry_header():
     assert saved["outcome"] == "ambiguous_transport"
     assert saved["estimated_usd"] is None
     validate_observation(saved)
+
+
+@pytest.mark.parametrize(
+    "raw,state,number",
+    [
+        (None, "absent", None),
+        ("1.25", "seconds", 1.25),
+        ("PRIVATE", "invalid", None),
+        ("nan", "invalid", None),
+        ("inf", "invalid", None),
+    ],
+)
+def test_retry_header_extension_retains_only_safe_values(raw, state, number):
+    import httpx
+
+    from harness.canary.evidence_v3 import retry_header_telemetry
+
+    headers = httpx.Headers({} if raw is None else {"retry-after": raw})
+    saved = retry_header_telemetry(headers)
+    assert saved["retry_after_state"] == state
+    assert saved["retry_after_seconds"] == number
+    assert "PRIVATE" not in canonical_json(saved)
+
+
+def test_retry_header_date_and_milliseconds_have_explicit_formats():
+    import httpx
+
+    from harness.canary.evidence_v3 import retry_header_telemetry
+
+    saved = retry_header_telemetry(
+        httpx.Headers(
+            {"retry-after": "Thu, 01 Jan 1970 00:00:01 GMT", "retry-after-ms": "250"}
+        )
+    )
+    assert saved == {
+        "retry_after_state": "date",
+        "retry_after_seconds": 1.0,
+        "retry_after_ms_state": "valid",
+        "retry_after_ms": 250.0,
+    }
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        {"duration_ms": float("nan")},
+        {"duration_ms": -1.0},
+        {"duration_ms": True},
+        {"read_complete": False, "json_state": "valid"},
+        {"retry_after_state": "seconds"},
+        {"retry_after_ms": 1.0},
+        {"extra": "PRIVATE"},
+    ],
+)
+def test_instrumentation_telemetry_cannot_invent_or_hide_observations(change):
+    from harness.canary.evidence_v3 import validate_result
+
+    with pytest.raises(EvidenceProjectionError):
+        validate_result(
+            {
+                "duration_ms": 1.0,
+                "read_complete": True,
+                "json_state": "valid",
+                "observed_http_status": 200,
+                **change,
+            }
+        )
+
+
+def test_copied_guard_models_are_revalidated_and_fail_closed():
+    from test_canary_instrumentation_v3 import attempt_guards
+
+    from harness.canary.evidence_v3 import DispatchTelemetry, validate_dispatch
+
+    good = attempt_guards()
+    for malformed in (
+        good.model_copy(update={"privacy_ok": 1}),
+        good.model_copy(update={"extra": "PRIVATE"}),
+    ):
+        with pytest.raises(EvidenceProjectionError):
+            validate_dispatch(
+                DispatchTelemetry.model_construct(
+                    sdk_retry_count=0, started_at=good.checked_at, guards=malformed
+                )
+            )
