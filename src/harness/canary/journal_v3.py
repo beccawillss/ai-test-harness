@@ -1024,6 +1024,8 @@ class CanaryJournal:
             raise JournalError("explicit_v3_required")
         self._mutex = threading.RLock()
         self._provider_gate = threading.Event()
+        self._finalizing = False
+        self._finalized = False
         self._pid = os.getpid()
         self._writer: int | None = _lock(registry, exclusive=True)
         self._ledger: int | None = None
@@ -1177,13 +1179,18 @@ class CanaryJournal:
         return self._provider_gate.is_set()
 
     @contextmanager
-    def _provider_checked(self, binding: ProviderBinding) -> Iterator[None]:
+    def _provider_checked(
+        self, binding: ProviderBinding, *, allow_sealed: bool = False
+    ) -> Iterator[None]:
         with self._mutex:
             try:
                 checked = ProviderBinding.model_validate(_plain(binding))
                 validate_binding(checked.definition)
                 if (
-                    self._writer is None
+                    (
+                        self._writer is None
+                        and not (allow_sealed and self._run.sealed and self._finalized)
+                    )
                     or self._pid != os.getpid()
                     or self._run.provider_profile is None
                     or checked.model_dump(mode="json")
@@ -1387,20 +1394,36 @@ class CanaryJournal:
             if self._run.state.stopped:
                 self._provider_gate.set()
 
-    def request_provider_stop(self, binding: ProviderBinding, code: str) -> None:
-        """Close immediately; preserve an active call's right to record its result."""
+    def request_provider_stop(
+        self, binding: ProviderBinding, code: str
+    ) -> Literal["accepted", "late"]:
+        """Close admission immediately; serialize acceptance against finalization.
+
+        A late stop observes successful local sealing, never changes its records,
+        and still validates the original binding. Failed publication is not late.
+        """
         self._provider_gate.set()
-        with self._provider_checked(binding):
-            if code not in PROVIDER_FAILURES:
-                raise JournalError("invalid_provider_stop")
-            if self._run.provider_stop is None:
-                self._record(
-                    "instrumentation_stop",
-                    {
-                        "profile": INSTRUMENTATION_PROFILE,
-                        "code": code,
-                    },
-                )
+        with self._mutex:
+            if self._finalizing:
+                # Only same-thread reentry can acquire this RLock during seal.
+                # A signal/callback cannot append inside an in-progress record.
+                raise JournalError("stop_acceptance_pending")
+            with self._provider_checked(binding, allow_sealed=True):
+                if code not in PROVIDER_FAILURES:
+                    raise JournalError("invalid_provider_stop")
+                if self._run.sealed:
+                    if not self._finalized:
+                        raise JournalError("finalization_unconfirmed")
+                    return "late"
+                if self._run.provider_stop is None:
+                    self._record(
+                        "instrumentation_stop",
+                        {
+                            "profile": INSTRUMENTATION_PROFILE,
+                            "code": code,
+                        },
+                    )
+                return "accepted"
 
     def record_decision(self, guards: OperationalGuards) -> Decision:
         try:
@@ -1549,24 +1572,29 @@ class CanaryJournal:
             },
         )
 
-    def stop(self, code: str = "operator_stop") -> None:
+    def stop(self, code: str = "operator_stop") -> Literal["accepted", "late"]:
+        """Latch before waiting; accept under the mutex, or observe a sealed run."""
         self._provider_gate.set()  # Close dispatch before waiting for journal I/O.
         with self._mutex:
+            if self._finalizing:
+                raise JournalError("stop_acceptance_pending")
+            if code not in {"operator_stop", "interrupted", "operational_error"}:
+                self.close()
+                raise JournalError("invalid_stop_code")
             if self._run.provider_profile is not None:
                 mapped = {
                     "operator_stop": "operator_stop",
                     "interrupted": "interrupted",
                     "operational_error": "provider_error",
                 }
-                if code not in mapped:
-                    self.close()
-                    raise JournalError("invalid_stop_code")
                 binding = ProviderBinding.model_validate_json(
                     canonical_json(self._run.provider_profile["binding"])
                 )
-                self.request_provider_stop(binding, mapped[code])
-                return
-        self._record("stop", {"code": code})
+                return self.request_provider_stop(binding, mapped[code])
+            if self._run.sealed and self._finalized and self._pid == os.getpid():
+                return "late"
+            self._record("stop", {"code": code})
+            return "accepted"
 
     def record_shutdown(
         self, *, worker_stopped: bool, sdk_closed: bool, no_inflight_provider: bool
@@ -1581,22 +1609,49 @@ class CanaryJournal:
         )
 
     def seal(self) -> None:
-        self._record(
-            "completion",
-            {
-                "evidence_sha256": self._run.bundle_digest(),
-                "state_sha256": fingerprint(_json(asdict(self._run.state))),
-                "accounting": self._run.accounting(),
-                "human_review": "PENDING",
-            },
-        )
-        # This record can only be created after the completion seal's fsync
-        # returned. Its presence proves that prior seal was acknowledged, even
-        # if publication of this final acknowledgement was itself interrupted.
-        self._record(
-            "completion_ack", {"completion_sequence": self._run.completion_sequence}
-        )
-        self.close()
+        """Admit once under the mutex, retaining it through both publications.
+
+        The successful latch check is the admission cutoff. Later stop requests
+        close dispatch immediately but cannot interleave durable acceptance.
+        A visible acknowledgement retains its existing replay meaning even when
+        its publication subsequently raises; failure here is never success.
+        """
+        with self._mutex:
+            try:
+                if self.provider_stopped:
+                    raise JournalError("finalization_stopped")
+                # Admission has won serialization. Close all further dispatch,
+                # including when validation or either publication later fails.
+                self._finalizing = True
+                self._provider_gate.set()
+                self._record(
+                    "completion",
+                    {
+                        "evidence_sha256": self._run.bundle_digest(),
+                        "state_sha256": fingerprint(_json(asdict(self._run.state))),
+                        "accounting": self._run.accounting(),
+                        "human_review": "PENDING",
+                    },
+                )
+                # Ack visibility proves the preceding completion fsync returned;
+                # neither its own directory fsync nor seal() return is required
+                # by the unchanged historical replay interpretation.
+                self._record(
+                    "completion_ack",
+                    {"completion_sequence": self._run.completion_sequence},
+                )
+            except BaseException:  # noqa: BLE001 - fixed diagnostics on interruption too
+                raise JournalError("finalization_failed_preserve_evidence") from None
+            finally:
+                try:
+                    self.close()
+                except BaseException:  # noqa: BLE001 - closure diagnostics remain private
+                    raise JournalError(
+                        "finalization_failed_preserve_evidence"
+                    ) from None
+                finally:
+                    self._finalizing = False
+            self._finalized = True
 
 
 def _report(binding: RegistryBinding, run_id: str) -> dict[str, Any]:

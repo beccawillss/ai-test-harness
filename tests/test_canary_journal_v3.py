@@ -3,6 +3,7 @@
 import copy
 import os
 import platform
+import threading
 from dataclasses import asdict, replace
 from decimal import Decimal
 from pathlib import Path
@@ -319,6 +320,275 @@ def tree_bytes(path):
         for p in path.rglob("*")
         if p.is_file()
     }
+
+
+def test_finalization_accepted_stop_is_durable_before_admission(tmp_path):
+    registry, writer = make(tmp_path)
+    complete(writer, seal=False)
+    for _ in range(2):
+        assert writer.stop() == "accepted"
+    with pytest.raises(
+        journal.JournalError, match="finalization_failed_preserve_evidence"
+    ):
+        writer.seal()
+    assert writer.provider_stopped
+    report = journal.inspect_run(registry, "run-1")
+    assert not report["completion_seal_present"]
+    assert [r["kind"] for r in report["records"]].count("stop") == 2
+
+
+def test_finalization_request_before_mutex_acquisition_blocks_admission(
+    tmp_path, monkeypatch
+):
+    registry, writer = make(tmp_path)
+    complete(writer, seal=False)
+    mutex = writer._mutex
+    waiting, release_stop = threading.Event(), threading.Event()
+    errors = []
+
+    def stop():
+        try:
+            writer.stop()
+        except journal.JournalError:
+            errors.append("stop_unaccepted")
+
+    stopper = threading.Thread(target=stop)
+
+    class Mutex:
+        def __enter__(self):
+            if threading.current_thread() is stopper:
+                waiting.set()
+                assert release_stop.wait(10)
+            return mutex.__enter__()
+
+        def __exit__(self, *args):
+            return mutex.__exit__(*args)
+
+    monkeypatch.setattr(writer, "_mutex", Mutex())
+
+    def seal():
+        try:
+            writer.seal()
+        except journal.JournalError:
+            errors.append("seal_denied")
+
+    caller = threading.Thread(target=seal)
+    try:
+        with mutex:
+            # Neither operation can acquire the journal mutex. Stop's genuine
+            # latch still closes, independently of which recorder is scheduled.
+            caller.start()
+            stopper.start()
+            assert waiting.wait(10) and writer.provider_stopped
+        caller.join(10)
+    finally:
+        release_stop.set()
+        caller.join(10)
+        stopper.join(10)
+        writer.close()
+    assert not caller.is_alive() and not stopper.is_alive()
+    assert sorted(errors) == ["seal_denied", "stop_unaccepted"]
+    report = journal.inspect_run(registry, "run-1")
+    assert not report["completion_seal_present"]
+    assert not any(r["kind"] == "stop" for r in report["records"])
+
+
+def test_finalization_holds_mutex_through_publication_and_concurrent_late_stops(
+    tmp_path, monkeypatch
+):
+    registry, writer = make(tmp_path)
+    complete(writer, seal=False)
+    publishing, release, waiting = (
+        threading.Event(),
+        threading.Event(),
+        [threading.Event() for _ in range(4)],
+    )
+    results, errors = [], []
+    mutex, publish = writer._mutex, journal._publish
+    stops = []
+
+    def stop():
+        try:
+            results.append(writer.stop())
+        except BaseException as error:  # noqa: BLE001 - fixed thread diagnostics
+            errors.append(type(error).__name__)
+
+    stops.extend(threading.Thread(target=stop) for _ in waiting)
+
+    class Mutex:
+        def __enter__(self):
+            thread = threading.current_thread()
+            if thread in stops:
+                waiting[stops.index(thread)].set()
+            return mutex.__enter__()
+
+        def __exit__(self, *args):
+            return mutex.__exit__(*args)
+
+    def blocked(directory, name, value):
+        publish(directory, name, value)
+        if value.get("kind") == "completion":
+            publishing.set()
+            assert release.wait(10)
+
+    def seal():
+        try:
+            writer.seal()
+        except BaseException as error:  # noqa: BLE001 - fixed thread diagnostics
+            errors.append(type(error).__name__)
+
+    monkeypatch.setattr(writer, "_mutex", Mutex())
+    monkeypatch.setattr(journal, "_publish", blocked)
+    caller = threading.Thread(target=seal)
+    caller.start()
+    try:
+        assert publishing.wait(10) and writer.provider_stopped
+        for thread in stops:
+            thread.start()
+        assert all(event.wait(10) for event in waiting)
+        assert results == []  # Every stop is still waiting for the held mutex.
+    finally:
+        release.set()
+        caller.join(10)
+        for thread in stops:
+            if thread.ident is not None:
+                thread.join(10)
+        writer.close()
+    assert not caller.is_alive() and all(not t.is_alive() for t in stops)
+    assert errors == [] and results == ["late"] * 4
+    report = journal.inspect_run(registry, "run-1")
+    assert report["completion_certified"]
+    assert not any(r["kind"] == "stop" for r in report["records"])
+    before = tree_bytes(Path(registry.path))
+    assert writer.stop() == "late"
+    journal.recover_save_only(registry, "run-1", tmp_path / "saved")
+    assert tree_bytes(Path(registry.path)) == before
+
+
+@pytest.mark.parametrize("invalid", ["binding", "code", None])
+def test_finalization_late_provider_stop_validates_binding_and_never_appends(
+    tmp_path, invalid
+):
+    from test_canary_driver_v3 import composition, run
+
+    c = composition(tmp_path)
+    assert run(c)["completion_certified"]
+    before = tree_bytes(Path(c.registry.path))
+    binding = (
+        c.binding.model_copy(update={"run_id": "different"})
+        if invalid == "binding"
+        else c.binding
+    )
+    code = "PRIVATE_INVALID_STOP" if invalid == "code" else "operator_stop"
+    if invalid:
+        with pytest.raises(journal.JournalError) as error:
+            c.writer.request_provider_stop(binding, code)
+        assert "PRIVATE" not in str(error.value)
+    else:
+        for _ in range(2):
+            assert c.writer.request_provider_stop(binding, code) == "late"
+    assert c.writer.provider_stopped
+    assert tree_bytes(Path(c.registry.path)) == before
+
+
+@pytest.mark.parametrize("point", ["manifest_only", "missing_shutdown", "closed"])
+def test_finalization_invalid_or_repeated_attempt_is_permanently_closed(
+    tmp_path, point
+):
+    registry, writer = make(tmp_path)
+    if point == "missing_shutdown":
+        complete(writer, seal=False, shutdown=False)
+    if point == "closed":
+        writer.close()
+    for _ in range(2):
+        with pytest.raises(
+            journal.JournalError, match="finalization_failed_preserve_evidence"
+        ):
+            writer.seal()
+        assert writer.provider_stopped
+    report = journal.inspect_run(registry, "run-1")
+    assert not report["completion_certified"]
+
+
+@pytest.mark.parametrize("entry", ["public", "provider"])
+def test_finalization_reentrant_stop_is_latched_but_not_accepted(
+    tmp_path, monkeypatch, entry
+):
+    from test_canary_driver_v3 import composition, run
+
+    c = composition(tmp_path)
+    original = journal._publish
+    pending = []
+
+    def publish(directory, name, value):
+        if value.get("kind") == "completion":
+            with pytest.raises(journal.JournalError, match="stop_acceptance_pending"):
+                if entry == "public":
+                    c.writer.stop()
+                else:
+                    c.writer.request_provider_stop(c.binding, "operator_stop")
+            pending.append(c.writer.provider_stopped)
+        original(directory, name, value)
+
+    monkeypatch.setattr(journal, "_publish", publish)
+    report = run(c)
+    assert pending == [True]
+    assert (
+        report["completion_certified"]
+        and not report["instrumentation_terminal_stop_recorded"]
+    )
+    assert c.writer.stop() == "late"
+
+
+@pytest.mark.parametrize("failure", [OSError, KeyboardInterrupt])
+def test_finalization_close_failure_is_private_and_cannot_report_late(
+    tmp_path, monkeypatch, failure
+):
+    registry, writer = make(tmp_path)
+    complete(writer, seal=False)
+    close = writer.close
+
+    def fail():
+        close()  # Release real test descriptors even when the observation fails.
+        raise failure("PRIVATE_FINALIZATION_CLOSE")
+
+    with monkeypatch.context() as patch:
+        patch.setattr(writer, "close", fail)
+        with pytest.raises(journal.JournalError) as error:
+            writer.seal()
+    assert str(error.value) == "finalization_failed_preserve_evidence"
+    assert writer.provider_stopped
+    report = journal.inspect_run(registry, "run-1")
+    # Durable acknowledgement is unchanged, but local closure did not succeed.
+    assert report["completion_certified"]
+    before = tree_bytes(Path(registry.path))
+    with pytest.raises(journal.JournalError):
+        writer.stop()
+    assert tree_bytes(Path(registry.path)) == before
+
+
+def test_finalization_reentrant_stop_during_closure_cannot_accept_or_append(
+    tmp_path, monkeypatch
+):
+    registry, writer = make(tmp_path)
+    complete(writer, seal=False)
+    close = writer.close
+    pending = []
+
+    def observed_close():
+        with pytest.raises(journal.JournalError, match="stop_acceptance_pending"):
+            writer.stop()
+        pending.append(writer.provider_stopped)
+        close()
+
+    with monkeypatch.context() as patch:
+        patch.setattr(writer, "close", observed_close)
+        writer.seal()
+    assert pending == [True]
+    assert writer.stop() == "late"
+    report = journal.inspect_run(registry, "run-1")
+    assert report["completion_certified"]
+    assert not any(r["kind"] == "stop" for r in report["records"])
 
 
 @pytest.mark.parametrize("fail_at", [None, "A1", "B1", "A2", "B2"])

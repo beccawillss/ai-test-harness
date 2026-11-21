@@ -8,6 +8,8 @@ import signal
 import stat
 import subprocess
 import sys
+import threading
+from contextlib import contextmanager
 from copy import deepcopy
 from pathlib import Path
 
@@ -30,6 +32,400 @@ from harness.canary.evidence_v3 import provider_observation
 from harness.core.fingerprints import canonical_json, fingerprint
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+@pytest.mark.parametrize(
+    "boundary",
+    [
+        "before_shutdown",
+        "before_completion",
+        "completion_before_link",
+        "completion_after_link",
+        "between_completion_and_ack",
+        "ack_before_link",
+        "ack_after_link",
+        "ack_after_sync",
+    ],
+)
+def test_slice5_stop_request_is_ordered_by_finalization_admission(
+    tmp_path, monkeypatch, boundary
+):
+    """All eight originally failed the blanket pre-return cancellation assertion.
+
+    Under the subsequently approved serialized admission contract, the first two
+    requests precede admission and prevent sealing. The other six follow admission
+    and may become late only after successful sealing. Original outcomes and the
+    exact expectation change remain recorded in the Slice 5 plan.
+
+    The existing Slice 4 composition supplies only synthetic application/provider
+    work. This is a finalization regression, never pinned-application evidence.
+    A barrier at the stop thread's mutex entry models a descheduled stop recorder
+    while the immediate, genuine dispatch latch is already closed.
+    """
+    from test_canary_driver_v3 import composition, run
+
+    c = composition(tmp_path)
+    reached, release, latched, recorder_waiting, record_stop = (
+        threading.Event() for _ in range(5)
+    )
+    results, errors = [], []
+    original_mutex = c.writer._mutex
+    original_publish, original_link = journal._publish, journal.os.link
+    original_record_shutdown = c.writer.record_shutdown
+    original_seal = c.writer.seal
+    current = threading.local()
+
+    def pause():
+        reached.set()
+        assert release.wait(10), "finalization barrier was not released"
+
+    def stop():
+        try:
+            c.driver.request_stop()
+        except BaseException as error:  # noqa: BLE001 - safe thread diagnostics only
+            errors.append(type(error).__name__)
+
+    stopper = threading.Thread(target=stop, name="slice5-stop")
+
+    @contextmanager
+    def observed_mutex():
+        if threading.current_thread() is stopper:
+            recorder_waiting.set()
+            assert record_stop.wait(10), "stop recorder was not released"
+        with original_mutex:
+            yield
+
+    original_set = c.writer._provider_gate.set
+
+    def set_gate():
+        original_set()
+        if threading.current_thread() is stopper:
+            latched.set()
+
+    def publish(directory, name, value):
+        kind = value.get("kind")
+        current.kind = kind
+        try:
+            original_publish(directory, name, value)
+            if (boundary, kind) in {
+                ("between_completion_and_ack", "completion"),
+                ("ack_after_sync", "completion_ack"),
+            }:
+                pause()
+        finally:
+            current.kind = None
+
+    def link(*args, **kwargs):
+        kind = getattr(current, "kind", None)
+        label = {"completion": "completion", "completion_ack": "ack"}.get(kind)
+        if boundary == f"{label}_before_link":
+            pause()
+        result = original_link(*args, **kwargs)
+        if boundary == f"{label}_after_link":
+            pause()
+        return result
+
+    def record_shutdown(**kwargs):
+        if boundary == "before_shutdown":
+            pause()
+        return original_record_shutdown(**kwargs)
+
+    def seal():
+        if boundary == "before_completion":
+            pause()
+        return original_seal()
+
+    def invoke():
+        try:
+            results.append(run(c))
+        except BaseException as error:  # noqa: BLE001 - safe thread diagnostics only
+            errors.append(type(error).__name__)
+
+    # Supply fresh contexts for every entry, retaining the real RLock's
+    # reentrancy and all original recording.
+    class Mutex:
+        def __enter__(self):
+            context = observed_mutex()
+            contexts = getattr(current, "contexts", [])
+            contexts.append(context)
+            current.contexts = contexts
+            return context.__enter__()
+
+        def __exit__(self, *args):
+            return current.contexts.pop().__exit__(*args)
+
+    monkeypatch.setattr(c.writer, "_mutex", Mutex())
+    monkeypatch.setattr(c.writer._provider_gate, "set", set_gate)
+    monkeypatch.setattr(journal, "_publish", publish)
+    monkeypatch.setattr(journal.os, "link", link)
+    monkeypatch.setattr(c.writer, "record_shutdown", record_shutdown)
+    monkeypatch.setattr(c.writer, "seal", seal)
+    caller = threading.Thread(target=invoke, name="slice5-finalization")
+    caller.start()
+    try:
+        assert reached.wait(10), "finalization boundary was not reached"
+        stopper.start()
+        assert latched.wait(10) and recorder_waiting.wait(10)
+        assert c.writer.provider_stopped and c.provider.stopped
+        # The stop recorder is deliberately descheduled, not the stop latch.
+        # A pre-admission latch must win without the stop recorder being scheduled.
+        release.set()
+        caller.join(10)
+    finally:
+        release.set()
+        record_stop.set()
+        caller.join(10)
+        if stopper.ident is not None:
+            stopper.join(10)
+        c.writer.close()
+    assert not caller.is_alive() and not stopper.is_alive()
+    assert errors == [] and len(results) == 1
+    report = journal.inspect_run(c.registry, c.writer.run_id)
+    before = tree_bytes(Path(c.registry.path))
+    journal.recover_save_only(c.registry, c.writer.run_id, tmp_path / "save-only")
+    assert tree_bytes(Path(c.registry.path)) == before
+    assert not report["authorises_live_execution"]
+    admitted = boundary not in {"before_shutdown", "before_completion"}
+    assert report["completion_certified"] is admitted, {
+        "boundary": boundary,
+        "status": report["status"],
+        "completion_acknowledged": report["completion_acknowledged"],
+        "driver_status": results[0]["driver_status"],
+        "instrumentation_terminal_stop_recorded": report[
+            "instrumentation_terminal_stop_recorded"
+        ],
+    }
+    assert results[0]["driver_status"] == ("completed" if admitted else "stopped")
+    assert not report["instrumentation_terminal_stop_recorded"]
+
+
+@pytest.mark.parametrize("repetitions", [1, 2])
+def test_slice5_persisted_stop_before_shutdown_prevents_sealing(tmp_path, repetitions):
+    from test_canary_driver_v3 import composition, run
+
+    c = composition(tmp_path)
+
+    def stop():
+        for _ in range(repetitions):
+            c.driver.request_stop()
+
+    c.driver._close_client = stop
+    report = run(c)
+    assert report["driver_status"] == "stopped"
+    assert report["instrumentation_terminal_stop_recorded"]
+    assert not report["completion_certified"]
+
+
+def test_slice5_stop_after_confirmed_finalization_preserves_completed_prefix(tmp_path):
+    """Existing completed evidence is immutable; subsequent stop cannot rewrite it."""
+    from test_canary_driver_v3 import composition, run
+
+    c = composition(tmp_path)
+    report = run(c)
+    assert report["completion_certified"] and report["driver_status"] == "completed"
+    before = tree_bytes(Path(c.registry.path))
+    for _ in range(2):
+        c.driver.request_stop()
+    after = journal.inspect_run(c.registry, c.writer.run_id)
+    assert after["completion_certified"]
+    assert tree_bytes(Path(c.registry.path)) == before
+
+
+@pytest.mark.parametrize("kind", ["completion", "completion_ack"])
+@pytest.mark.parametrize("visible", [False, True])
+@pytest.mark.parametrize("failure", [OSError, KeyboardInterrupt])
+def test_slice5_existing_publication_failure_replay_characterization(
+    tmp_path, monkeypatch, kind, visible, failure
+):
+    """Characterize original replay, without approving it as Slice 5 semantics."""
+    from test_canary_driver_v3 import composition, run
+
+    c = composition(tmp_path)
+    original = journal._publish
+
+    def publish(directory, name, value):
+        if value.get("kind") == kind:
+            if visible:
+                original(directory, name, value)
+            raise failure("SYNTHETIC_PUBLICATION_INTERRUPTION")
+        original(directory, name, value)
+
+    monkeypatch.setattr(journal, "_publish", publish)
+    report = run(c)
+    assert report["driver_status"] == "stopped"
+    # A visible ack already proves prior core-seal fsync under the old protocol.
+    # No persisted bit tells replay whether its producer subsequently returned.
+    assert report["completion_certified"] is (kind == "completion_ack" and visible)
+    before = tree_bytes(Path(c.registry.path))
+    journal.recover_save_only(c.registry, c.writer.run_id, tmp_path / "saved")
+    assert tree_bytes(Path(c.registry.path)) == before
+
+
+@pytest.mark.parametrize("after_link", [False, True])
+def test_slice5_process_loss_at_ack_link_characterizes_existing_cutoff(
+    tmp_path, after_link
+):
+    program = r"""
+import os, sys
+from pathlib import Path
+from test_canary_driver_v3 import composition, run
+from harness.canary import journal_v3 as journal
+c = composition(Path(sys.argv[1]))
+original_publish, original_link = journal._publish, journal.os.link
+kind = None
+def publish(directory, name, value):
+    global kind
+    kind = value.get('kind')
+    try:
+        original_publish(directory, name, value)
+    finally:
+        kind = None
+def link(*args, **kwargs):
+    if kind == 'completion_ack' and sys.argv[2] == 'before':
+        os._exit(23)
+    result = original_link(*args, **kwargs)
+    if kind == 'completion_ack' and sys.argv[2] == 'after':
+        os._exit(23)
+    return result
+journal._publish, journal.os.link = publish, link
+run(c)
+"""
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-B",
+            "-c",
+            program,
+            str(tmp_path),
+            "after" if after_link else "before",
+        ],
+        env={
+            "PATH": os.defpath,
+            "PYTHONPATH": "src:tests",
+            "PYTHONDONTWRITEBYTECODE": "1",
+        },
+        capture_output=True,
+        check=False,
+        timeout=30,
+    )
+    assert result.returncode == 23
+    registry = journal.load_registry(tmp_path / "v3-registry")
+    report = journal.inspect_run(registry, "run-1")
+    assert report["completion_seal_present"]
+    assert report["completion_certified"] is after_link
+    assert report["completion_acknowledged"] is after_link
+    before = tree_bytes(Path(registry.path))
+    journal.recover_save_only(registry, "run-1", tmp_path / "saved")
+    assert tree_bytes(Path(registry.path)) == before
+
+
+@pytest.mark.parametrize(
+    "point", ["completion_sync", "ack_before_link", "ack_sync", "ack_after_sync"]
+)
+@pytest.mark.parametrize("failure", [OSError, KeyboardInterrupt])
+def test_finalization_failed_publication_does_not_accept_late_stop(
+    tmp_path, monkeypatch, point, failure
+):
+    registry, writer = make(tmp_path)
+    complete(writer, seal=False)
+    reached, release, waiting = (threading.Event() for _ in range(3))
+    results, errors = [], []
+    mutex, publish, fsync, link = (
+        writer._mutex,
+        journal._publish,
+        journal.os.fsync,
+        journal.os.link,
+    )
+    current = threading.local()
+
+    def fail():
+        reached.set()
+        assert release.wait(10)
+        raise failure("PRIVATE_FINALIZATION_FAILURE")
+
+    def interrupted_publish(directory, name, value):
+        current.kind = value.get("kind")
+        try:
+            publish(directory, name, value)
+            if point == "ack_after_sync" and current.kind == "completion_ack":
+                fail()
+        finally:
+            current.kind = None
+
+    def interrupted_fsync(descriptor):
+        if stat.S_ISDIR(os.fstat(descriptor).st_mode) and (
+            point,
+            getattr(current, "kind", None),
+        ) in {
+            ("completion_sync", "completion"),
+            ("ack_sync", "completion_ack"),
+        }:
+            fail()
+        return fsync(descriptor)
+
+    def interrupted_link(*args, **kwargs):
+        if (
+            point == "ack_before_link"
+            and getattr(current, "kind", None) == "completion_ack"
+        ):
+            fail()
+        return link(*args, **kwargs)
+
+    def stop():
+        try:
+            results.append(writer.stop())
+        except journal.JournalError as error:
+            errors.append(str(error))
+
+    stopper = threading.Thread(target=stop)
+
+    class Mutex:
+        def __enter__(self):
+            if threading.current_thread() is stopper:
+                waiting.set()
+            return mutex.__enter__()
+
+        def __exit__(self, *args):
+            return mutex.__exit__(*args)
+
+    def seal():
+        try:
+            writer.seal()
+        except journal.JournalError as error:
+            errors.append(str(error))
+
+    monkeypatch.setattr(writer, "_mutex", Mutex())
+    monkeypatch.setattr(journal, "_publish", interrupted_publish)
+    monkeypatch.setattr(journal.os, "fsync", interrupted_fsync)
+    monkeypatch.setattr(journal.os, "link", interrupted_link)
+    caller = threading.Thread(target=seal)
+    caller.start()
+    try:
+        assert reached.wait(10) and writer.provider_stopped
+        stopper.start()
+        assert waiting.wait(10)
+        assert results == []
+    finally:
+        release.set()
+        caller.join(10)
+        if stopper.ident is not None:
+            stopper.join(10)
+        writer.close()
+    assert not caller.is_alive() and not stopper.is_alive()
+    assert results == []  # A failed producer cannot classify a stop as late.
+    assert "finalization_failed_preserve_evidence" in errors
+    assert len(errors) == 2 and "PRIVATE" not in repr(errors)
+    report = journal.inspect_run(registry, "run-1")
+    # These are two distinct facts: producer failure and unchanged ack evidence.
+    assert report["completion_certified"] is (point in {"ack_sync", "ack_after_sync"})
+    assert writer.provider_stopped
+    before = tree_bytes(Path(registry.path))
+    with pytest.raises(journal.JournalError):
+        writer.seal()
+    with pytest.raises(journal.JournalError):
+        writer.stop()
+    journal.recover_save_only(registry, "run-1", tmp_path / "saved")
+    assert tree_bytes(Path(registry.path)) == before
 
 
 def rewrite(path, change):
