@@ -1,5 +1,367 @@
 # C3b Slice 5: bounded offline controller and pinned application integration
 
+## Publication continuation approved on 2026-11-22
+
+Independent human QA explicitly approved one commit and publication of the
+bounded offline controller for GitHub PR review, based on
+`62f77ad5ea9a7e2c280979ca6bdbe67ffa9b8450`. This supersedes the earlier
+publication prohibition in the implementation record below. The exact branch
+and four-file scope remain unchanged. No merge, auto-merge, live requests,
+credentials, judge, Study execution, dependency change or Slice 6 is authorised.
+
+GitHub main was freshly verified at the exact approved base; the feature branch
+was not yet published. All three reviewed Python SHA-256s and executable modes
+match the independent-QA handoff. All 211 other baseline tracked files remain
+exact. Existing worktree statuses were saved read-only; unavailable historical
+worktrees are preserved without repair, cleanup or pruning. The pinned application
+remains clean at its approved revision.
+
+Publication sequence:
+
+- [x] Verify exact baseline, reviewed Python bytes/modes and four-file scope.
+- [x] Refresh focused controller/application tests and static checks before commit.
+- [ ] Create exactly one commit: `Integrate pinned Sales Agent with offline v3 canary controller`.
+- [ ] On the actual clean commit, run unchanged `verify_source()` and the public
+  `OfflineCanaryControllerV3.run()` with an observed-identity synthetic receipt,
+  the pinned application/environment and a fresh private mock-only registry.
+- [ ] Only after that mandatory public-path gate succeeds, push the existing
+  feature branch and create the approved PR; then inspect CI/review/mergeability.
+- [ ] Stop for independent human QA without merge or auto-merge.
+
+The final clean-source gate must demonstrate real four-turn sessions, commerce,
+public traces, usage reconciliation, owned-resource shutdown and valid completion/
+acknowledgement. Human prose review stays PENDING; source authorisation,
+authenticated provider evidence and live authority stay false. The private
+development method cannot substitute for this check. Any gate failure stops
+publication without altering the verifier or approved production source.
+
+To preserve the single approved commit and its clean executable identity, this
+publication entry is prepared before that commit. Post-commit verification
+results, exact commit/tree, fresh synthetic evidence, PR number and CI findings
+will be recorded outside the worktree and in the PR/final handoff; this plan will
+not be dirtied or amended to insert a self-referential commit hash or outcome.
+The prior verification below is historical evidence, not a new test run.
+
+Fresh pre-commit results for this publication step: normal controller **47 passed**,
+1.37s; mandatory pinned application **39 passed**, no skips, 142.89s. Ruff across
+src/tests, mypy across 61 source files, formatting of all three reviewed Python
+files and tracked whitespace pass. No Python implementation/test bytes changed.
+The previously reported SDK 28, journal 267 and full-suite 3,630/6 results remain
+applicable to those exact reviewed bytes; they are not claimed as fresh runs here.
+
+## Implementation record before publication approval
+
+This section supersedes the historical publication-only authorisation below.
+The user approved the remaining four-path Slice 5 implementation on 2026-11-22,
+then explicitly approved the private development-only testing seam under §14.
+
+- Baseline: `62f77ad5ea9a7e2c280979ca6bdbe67ffa9b8450` (merged PR #30).
+- GitHub `main` matched that exact SHA before implementation; fetched by SHA.
+- Branch: `feat/canary-runtime-v3-slice5-controller`.
+- Worktree: `/private/tmp/ai-test-harness-canary-runtime-v3-slice5-controller`.
+- Application: `3320e556540d3f95bee1e8509f13e558ce266b6c`, clean at
+  `/Users/rebeccawilliams/Developer/study-v1-local/sales-agent`.
+- Only authorised paths: controller_v3.py, its normal and application test modules,
+  and this plan. No commit, push, PR, merge, dependency change or live work.
+
+### Milestones and source gate
+
+- [x] Verify remote baseline; create one isolated feature branch/worktree.
+- [x] Inspect pinned executable flow, import configuration, SDK and lifecycle.
+- [x] Obtain the explicitly required development-seam approval before source edits.
+- [x] Implement owned mock-only controller and both distinct test modules.
+- [x] Complete final normal, pinned application and SDK suites and relevant regressions.
+- [x] Complete the final locked offline full-suite rerun on stable controller source.
+- [x] Complete static/preservation checks and independent-QA report.
+- [ ] After separately approved publication: exact clean committed controller
+  source verification. This gate is mandatory and currently pending.
+
+Public `OfflineCanaryControllerV3.run()` always uses unchanged `verify_source()`
+at admission and subsequent source boundaries. Its clean-source requirement
+deliberately rejects this uncommitted implementation. No fallback is provided.
+The approved private `_run_development_offline()` method accepts only explicitly
+synthetic receipt provenance, exact supplied HTTPX MockTransport, verified pinned
+application source/fixtures/runtime and a fresh private journal. Its development
+digest detects source mutation without claiming a committed identity. Both modes
+remain structurally mock-only. Every development report states:
+
+```text
+development_only = true
+source_verification = pending_clean_committed_revision
+source_authorised = false
+provider_evidence_authenticated = false
+authorises_live_execution = false
+human_review = PENDING
+```
+
+No development result establishes authenticated approval or live readiness.
+Synthetic project/headroom/operator observations are checked against the actual
+owned mock boundary, admission locks, stop latch, configuration and journal
+accounting. Billing remains unknown; the future external $10 project limit is
+explicitly unverified. The unchanged policy and transport enforce all approved
+turn/call/attempt limits and the $5 estimated pause.
+
+### Composition checked against the actual pin
+
+The new controller uses `salesagent.main.create_app(settings=...,
+responses_client=driver.responses_client)` and explicitly enters Starlette
+TestClient. Only the approved chat POST and trace GET routes pass through its
+outer exact HTTPX MockTransport. No listener, Uvicorn worker, real HTTP transport,
+redirect following or provider fallback is constructed.
+
+`api.routes.chat` calls real `ChatService.chat`, which leases independent A/B
+entries in the factory's actual `InMemorySessionRepository`. It calls real
+`AgentOrchestrator.run`; `_initial_messages` constructs history and constraint
+context. The driver history checker decorates the bounded client, which delegates
+unchanged to pinned `OpenAIResponsesClient`, one explicitly owned OpenAI 3.3.1 SDK,
+its explicit HTTPX client, ProviderTransportV3, and the exact supplied provider
+mock. Tool results return through the real dispatcher and commerce service;
+ChatService merges constraints, hydrates recommendations, prices the promotion,
+stores real traces and commits session state. Both trace GETs use the public route.
+
+Before importing main, environment *names* are checked; ambient OpenAI, Sales Agent
+and proxy configuration is rejected without reading credential values. The default
+`app = create_app()` is inspected as unused, empty and SDK-free (the pin constructs
+its SDK lazily). Only the injected application receives canary work. The SDK uses
+a literal synthetic offline key, synthetic organisation/project identifiers,
+explicit endpoint, timeout 30 and SDK retries 2. It receives actual application
+requests with low effort, gpt-5.6-terra and 2000 maximum output tokens.
+
+The controller owns application admission, registry/journal, gateway, TestClient
+lifespan, actual portal and loop-local AnyIO worker thread objects, SDK, HTTP client
+and provider transport. Cleanup attempts all closures, checks client/SDK closure,
+lifespan-task completion and portal reset, joins observed owned threads with a
+shared deadline, and observes provider locks and active-call state. Failure prevents
+sealing and poisons application ownership for the process. No reset/restart or
+background cleanup API exists. The pinned AnyIO adapter is intentionally narrow;
+dependency-lock checks reject other runtime package versions.
+
+The process network audit guard rejects Internet sockets, connects, binds and
+DNS during owned execution. Local AF_UNIX event-loop wakeup socketpairs remain
+necessary for TestClient/AnyIO and are not network connections. The guard is scoped
+to exclusive ownership; callbacks and the containing process remain trusted code.
+Synchronous library shutdown is cooperative: a blocking syscall cannot be forcibly
+cancelled without adding a supervisor; no successful report is produced while
+shutdown has not returned. Exceeding the observed cleanup deadline fails closed.
+
+### Verification record
+
+Initial read-only source components matched harness tree
+`d9629ad33548af28f91666cdf1c392283d645ec8` and application tree
+`15b4d87d1ba9c27cbbe22c97d07d3d21a65788b6`. Both approved fixture hashes and all
+32 applicable installed application registry-package versions match its lock.
+Application environment: CPython 3.13.15, OpenAI 3.3.1, HTTPX 0.28.1, FastAPI
+0.141.1, Starlette 1.6.0, AnyIO 4.14.2, Pydantic 2.13.4.
+
+The first genuine four-turn integration passed, with 12 logical calls and attempts
+(A1=4, B1=1, A2=3, B2=4), four chat POSTs, eight trace GETs, real inventory stock 5/6,
+£55 pack / £49.50 discounted quote / £22 beanie and no surviving owned threads.
+This is development-only simulation evidence; human prose review remains pending.
+
+Baseline journal/fault regressions: **267 passed**, 141.63s. Existing pinned SDK
+suite: **25 passed**, 23.87s. Harness-runtime source suite: **99 passed, 1 skipped**,
+4.25s (CPython 3.13-only source composition); the separate real CPython 3.13
+controlled source-fixture test passed: **1 passed, 124 deselected**, 4.22s.
+
+Early non-final trials are not final verification: combining the entire runtime
+suite with SDK tests in the application environment produced 124 passes and one
+expected harness-lock/package mismatch; that harness-only dependency test was then
+rerun in its correct locked environment above. The first normal controller run
+exposed an overbroad test environment stub and was corrected; a subsequent run
+had 40 passes and one logger-cache test-stub failure, also corrected. The first
+15-case application trial had 13 passes and two failures: the unknown-liability
+test incorrectly expected further dispatch despite its actual guard, and a source
+edit during that trial correctly stopped a behavioural test. The latter passed
+unchanged in isolation (1 passed, 14 deselected, 6.40s). Final suites will run on
+stable source; these trials are not substituted for them.
+
+### Independent QA implementation report (A–J)
+
+**A. Git and scope.** The exact baseline and remote-main verification are above.
+HEAD remains `62f77ad5ea9a7e2c280979ca6bdbe67ffa9b8450` on the isolated controller
+branch. The only changed baseline path is this plan; the only additions are
+`src/harness/canary/controller_v3.py`, `tests/test_canary_controller_v3.py` and
+`tests/test_canary_controller_v3_application.py`. Actual Git blob hashes and
+executable modes were compared for all **212** baseline tracked files: **211**
+remain exact. This includes every approved journal, driver, instrumentation,
+definition, acceptance/execution policy, estimator, lock, fixture, dataset and
+tracked historical artifact. The original dirty checkout's status still matches
+the initial inventory. No source writes targeted earlier worktrees or historical
+private evidence. All new journals are synthetic test artifacts in new temporary
+directories. No project commit, push, PR, merge, reset, prune or deletion occurred.
+
+**B. Controller architecture.** Public construction requires `offline=True`, an
+exact supplied HTTPX MockTransport, explicit source roots/receipt and an external
+evidence parent. `run()` is single-use, acquires exclusive in-process application
+ownership and always admits through unchanged `verify_source()`. `request_stop()`
+latches its own permanent event before driver/provider/journal synchronization;
+a caller's pre-construction event is sampled into that private latch and cannot
+later clear it. There is no public development flag, alternate transport, live
+mode, resume, replacement POST or ownership-reset API. The approved private seam
+has the six explicit reporting qualifications listed above. The result combines
+saved normalized evidence with local controller/resource observations. Success
+also requires positive final completion certification, accounting reconciliation
+and verified cleanup; a driver's successful return alone is insufficient.
+
+**C. Real application composition.** The pinned factory, chat/trace routers,
+ChatService, orchestrator, session/trace repositories, constraints, hydrator,
+pricing and commerce dispatcher are all executed. The factory's one session
+repository contains independent A and B entries; it is not replaced by two mock
+repositories. Direct `get_state()` checks verify both actual committed histories.
+The separate default application remains unused with empty repositories and a
+lazy client whose SDK is never constructed. Exactly one owned, mock-bound SDK
+instance is constructed for the injected application. Actual prepared request
+headers/body, SDK timeout/retries, function-output continuation and cross-turn
+history are asserted. Source and installed-version checks pin the otherwise
+private AnyIO/SDK observation details. No target or dependency was modified.
+
+**D. Genuine four-turn evidence.** The final happy-path run is
+`run-c65070b912f24dbeb5db59077f26742e`, in
+`/private/tmp/canary-slice5-application-qa-20261122-final/test_genuine_four_turn_applica0/offline-v3-c65070b912f24dbeb5db59077f26742e`.
+These are new development-only test artifacts, not historical operator evidence.
+
+| Turn | Session | Index | Logical calls | Real tools | Tokens (input/output) |
+| --- | --- | --- | --- | --- | --- |
+| A1 | A | 1 | 4 | search_products, get_product, check_inventory | 400 / 40 |
+| B1 | B | 1 | 1 | none | 100 / 10 |
+| A2 | A | 2 | 3 | get_product, validate_discount | 300 / 30 |
+| B2 | B | 2 | 4 | search_products, get_product, check_inventory | 400 / 40 |
+
+Observed session A is `c283a98e-6220-4d16-831e-39c7370b3f39`; session B is
+`d5d49208-1c04-49e1-a0aa-d5c563bc2925`. The four trace IDs are respectively
+`9d676772-6d16-49c4-81c5-65eb0613cbc3`,
+`0756cf02-2199-4575-9c1f-3bcc7c1bea7b`,
+`85f11f0c-0de5-483a-9041-2fd07ca1d872` and
+`b27d77c5-5a88-4cae-9aaf-dd4366338b38`. All four were genuinely stored and
+retrieved twice through the public route. A1 establishes Moss / 20L / £60, retained
+unchanged at A2; B starts fresh and B2 establishes Rust / One Size / £25. The actual
+fixture supplies ACC-003 at £55 with Moss/20L stock 5, WELCOME10 produces £49.50,
+and ACC-001 is £22 with Rust/One Size stock 6. The mechanical assessment is PASS,
+the overall assessment retains mandatory pending human review. Deliberately wrong
+structured state persists without repair; incorrect promotion nomination remains
+a behavioural FAIL and the trustworthy run still advances through all four turns.
+
+**E. Provider accounting.** The happy path has **12 logical calls, 12 attempts**,
+zero unknown/incomplete calls, **1,200 input + 120 output = 1,320 tokens**, and
+approved-estimator subtotal **$0.00444**. A real SDK 500/500/200 trajectory with
+known-zero failure usage gives 12 logical calls / 14 attempts / two retries,
+unchanged tokens/cost and reconciled real traces. Unknown retry usage stops at the
+first forwarded failure: one call/attempt, one unknown attempt, one incomplete
+call, subtotal 0 and total **unknown (`null`)**, never a claim of zero liability.
+The SDK may reenter but the next accounting guard cannot dispatch. A large
+synthetic usage response demonstrably trips the $5 estimated pause. Malformed
+model output and timeouts stop operationally while preserving available evidence.
+No real requests were sent; billing remains unknown and the external $10 project
+limit remains unverified. All operational project/operator facts are synthetic.
+
+**F. Stop and shutdown.** Deterministic controller tests cover stop before
+construction, during source verification/ownership acquisition, before POST and
+dispatch, within application/provider work, SDK backoff, returning-result
+recording, trace reads, assessment, shutdown, finalization admission and admitted
+publication. A blocked journal mutex test observes all controller/transport/journal
+latches closed while stop acceptance is still blocked. Already forwarded results
+can record permitted evidence. Real lifespan/SDK/HTTP/provider/worker-observation
+cleanup failures attempt remaining closures and prevent successful certification;
+normal tests additionally reject surviving workers, active requests/provider
+locks and cleanup deadline overruns. Successful application cases observe at least
+the actual portal and worker, join them, and confirm no surviving owned threads,
+no active shopper request, closed SDK/HTTP resources, exited lifespan and completed
+lifespan task. Owned locks reject subsequent admission after cleanup uncertainty.
+
+PR #30 semantics are unchanged: pre-admission stop prevents sealing; post-admission
+stop waits and may be late after successful seal. Publication failures cannot
+return controller success. In particular, a saved visible acknowledgement can
+still certify the journal under historical replay after a producer error, while
+the controller/driver invocation correctly reports stopped. Process death after
+dispatch intent/result publication leaves the committed incomplete prefix; only
+save-only inspection/export follows, with byte-preservation assertions. No replay.
+
+**G. Source verification.** Exact clean baseline/application identities, fixture
+hashes and all applicable locked installed-package versions passed component
+checks. The final CPython 3.13 controlled clean Git fixture ran unchanged public
+`verify_source()` successfully: **1 passed, 99 deselected**, 1.57s. This is explicitly
+a synthetic temporary test commit, not approval or verification of this worktree.
+Normal tests demonstrate that public controller admission rejects the actual
+uncommitted source. Mutation detection, origin checks, wrong runtime/revision,
+dependency/fixture failures and ambient credential-name rejection are covered.
+Actual clean committed controller verification remains **mandatory and pending**
+after separately approved publication. No authenticated receipt or source/live
+authority was fabricated.
+
+**H. Verification.** Commands use stripped environments, `PYTHONDONTWRITEBYTECODE=1`,
+`python -B`, `PYTHONPATH=src` (plus the pinned application source when applicable),
+disabled pytest cache and the existing locked interpreters. No dependencies were
+installed or updated.
+
+| Suite/check | Final observed result |
+| --- | --- |
+| Normal controller, locked harness CPython 3.12.13 | **47 passed**, 1.61s |
+| Mandatory pinned application, CPython 3.13.15, explicitly enabled | **39 passed**, no skips, 157.95s |
+| Pinned instrumentation SDK plus historical SDK mocks | **28 passed**, no skips, 26.70s |
+| Relevant Slice 1–4 source/driver/instrumentation/evidence/policies/acceptance | **682 passed, 1 skipped**, 222.78s |
+| PR #30 journal/fault regressions | **267 passed**, no skips, 141.63s; also included in full suite |
+| Historical pinned application state/selection compatibility | **11 passed**, no skips; separate CPython 3.13 execution |
+| Full locked offline suite on final controller source | **3,630 passed, 6 skipped**, 552.23s; no failures or xfails |
+| Ruff across src/tests | PASS |
+| Mypy across src | PASS, 61 source files |
+| Formatting of all three new Python files | PASS |
+| Tracked/new-file/plan whitespace and final preservation | PASS; 211/212 baseline files exact, only authorised plan changed; three authorised additions; all 76 application files exact |
+
+The only explicitly excluded module is `tests/test_canary_controller.py`, the
+historical listening-server controller suite. The six normal-environment skips
+are the new explicitly enabled application module, instrumentation SDK module,
+historical SDK module, selection-state module, historical state module, and the
+CPython 3.13-only complete source test in runtime_v3. The mandatory new application
+suite, both SDK modules, both historical state modules and complete controlled source test all ran separately in
+the pinned environment and passed; none of those normal-environment skips is
+represented as integration success. No other module was excluded.
+
+An expanded intermediate application suite passed **32/32**, 113.27s, then
+**37/37**, 140.78s. Final review added a positive final-evidence gate and two
+regressions; the stable-source **39/39** run above covers that final controller.
+The earlier full run completed after this final edit but started beforehand; a
+fresh full run completed with **3,630 passed, 6 skipped**, 552.23s, on the final
+stable controller source. Earlier failed development trials remain recorded above.
+
+Final commands (working directory is the isolated controller worktree):
+
+```text
+env -i PATH=/usr/bin:/bin PYTHONPATH=src PYTHONDONTWRITEBYTECODE=1 /private/tmp/ai-test-harness-canary-runtime-v3-slice2/.venv/bin/python -B -m pytest tests/test_canary_controller_v3.py -q --tb=short -rs -p no:cacheprovider
+env -i PATH=/usr/bin:/bin CANARY_V3_APPLICATION_TESTS=1 PYTHONPATH=src:/Users/rebeccawilliams/Developer/study-v1-local/sales-agent/src PYTHONDONTWRITEBYTECODE=1 /Users/rebeccawilliams/Developer/study-v1-local/sales-agent/.venv/bin/python -B -m pytest tests/test_canary_controller_v3_application.py -q --tb=short -rs -p no:cacheprovider
+env -i PATH=/usr/bin:/bin PYTHONPATH=src:/Users/rebeccawilliams/Developer/study-v1-local/sales-agent/src PYTHONDONTWRITEBYTECODE=1 /Users/rebeccawilliams/Developer/study-v1-local/sales-agent/.venv/bin/python -B -m pytest tests/test_canary_instrumentation_v3_sdk.py tests/test_canary_sdk.py -q --tb=short -rs -p no:cacheprovider
+env -i PATH=/usr/bin:/bin PYTHONPATH=src PYTHONDONTWRITEBYTECODE=1 /private/tmp/ai-test-harness-canary-runtime-v3-slice2/.venv/bin/python -B -m pytest -q --tb=short -rs -p no:cacheprovider --ignore=tests/test_canary_controller.py
+```
+
+The final mandatory application run additionally used a newly created explicit
+pytest base directory `/private/tmp/canary-slice5-application-qa-20261122-final`
+to preserve the referenced synthetic evidence. Do not reuse that base directory
+for another pytest invocation. The commands above allow pytest a fresh test root.
+
+**I. Limits and future gates.** No observed mandatory offline integration,
+shutdown or evidence invariant remains blocked. Full/static/preservation checks
+passed; actual clean committed controller verification remains pending. Cleanup
+is cooperative in a trusted process: synchronous library calls cannot be forcibly
+interrupted, and a blocked call cannot produce a successful completion report.
+The five-second cleanup deadline is observed on return, without a background
+supervisor or forced worker termination. The process-wide Python audit hook stays
+registered but is inactive after verified cleanup; it is not a hostile-code
+sandbox. The unused default app and imported modules remain inert process memory,
+with no SDK or worker allocated to that app. Temporary synthetic QA artifacts are
+not authenticated provider evidence. Model prose quality is not evaluated by these
+scripts; human review remains PENDING. Clean committed source verification,
+independent QA, authenticated approval and any future external project/billing or
+live execution authority require separate work/approval. No live interface,
+credentials, paid request, judge, Study run, Slice 6 or publication was introduced.
+
+**J. QA recommendation: GO for preparing a Slice 5 controller PR for independent
+human QA.** The bounded offline implementation and mandatory integration pass.
+Publication still requires separate approval; no commit, push, PR or merge has
+been made. This is not live readiness or authenticated source approval. Human
+prose review is PENDING and clean committed controller source verification is a
+mandatory later gate. Stop here for independent human review.
+
+## Historical PR #30 safety-correction plan (preserved)
+
 Exact approved baseline: `6428c39076c3fa3cf55d65b9ccedfc4f01cf0cab`.
 Branch: `feat/canary-runtime-v3-slice5`.
 Worktree: `/private/tmp/ai-test-harness-canary-runtime-v3-slice5`.
