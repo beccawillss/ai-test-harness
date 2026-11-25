@@ -18,6 +18,8 @@ import test_canary_integration_v3 as c
 import test_canary_integration_v3_faults as faults
 
 keys = c.keys
+child_scratch = faults.child_scratch
+child_keys = faults.child_keys
 
 
 def enabled(name):
@@ -135,14 +137,16 @@ def origins(source, application):
     return result
 
 
-def run_child(mode, source, application, scratch, signing=None):
+def run_child(mode, source, application, scratch, writable, signing=None):
     """Fresh interpreter imports harness only from exact clean source fixture."""
     import tomllib
 
     import httpx
     from test_canary_approval_v3 import SyntheticKeys
 
+    writable = faults.configure_child_scratch(writable)
     source, application, scratch = map(Path, (source, application, scratch))
+    assert source.is_relative_to(writable) and scratch.is_relative_to(writable)
     assert Path(c.runtime.__file__).resolve().is_relative_to(source / "src/harness")
     assert sys.version_info[:2] == (3, 13)
     assert local_git(application, "rev-parse", "HEAD") == c.runtime.APPLICATION_REVISION
@@ -161,7 +165,7 @@ def run_child(mode, source, application, scratch, signing=None):
     # Public verification/controller execution and subsequent imports run under it.
     tracked = local_git(application, "ls-files", "-z").split("\0")
     observations = faults.isolation(
-        Path(os.environ["TMPDIR"]).parent,
+        writable,
         read_roots=(source / "src", application / "src"),
         read_files=(
             source / "uv.lock",
@@ -171,6 +175,7 @@ def run_child(mode, source, application, scratch, signing=None):
         git_roots=(source, application),
         signing_keys=(signing["primary"], signing["unknown"]) if signing else (),
     )
+    faults.check_child_scratch(writable)
     receipt = source_receipt(source, application)
     verified = c.runtime.verify_source(
         receipt, harness_root=source, application_root=application
@@ -187,6 +192,8 @@ def run_child(mode, source, application, scratch, signing=None):
         "source_matches": True,
         "source_authorised": False,
         "source_commit": receipt.harness.commit,
+        "writable": str(writable),
+        "temporary": os.environ["TMPDIR"],
     }
     if mode == "source":
         with pytest.raises(c.runtime.SourceError, match="^harness_identity_mismatch$"):
@@ -379,7 +386,9 @@ def invoke(mode, tmp_path, application, keys=None):
         "PATH": "/usr/bin:/bin",
         "LC_ALL": "C",
         "LANG": "C",
-        "TMPDIR": os.environ["TMPDIR"],
+        "TMPDIR": str(tmp_path / "tmp"),
+        "TEMP": str(tmp_path / "tmp"),
+        "TMP": str(tmp_path / "tmp"),
         "PYTHONDONTWRITEBYTECODE": "1",
         "PYTHONPATH": os.pathsep.join(
             [
@@ -396,6 +405,7 @@ def invoke(mode, tmp_path, application, keys=None):
         "source": str(root),
         "application": str(application),
         "scratch": str(scratch),
+        "writable": str(tmp_path),
     }
     if keys:
         data["signing"] = {
@@ -425,24 +435,27 @@ def invoke(mode, tmp_path, application, keys=None):
     assert result.stderr == ""
     assert monotonic() <= deadline, "total explicit-gate deadline exceeded"
     record = json.loads(result.stdout)
+    assert record["writable"] == str(tmp_path)
+    assert record["temporary"] == str(tmp_path / "tmp")
+    assert not (tmp_path.parent / "forbidden-child-write").exists()
     record["seconds"] = monotonic() - started
     (tmp_path / "gate-result.json").write_text(json.dumps(record, indent=2))
     return record
 
 
-def test_gate_a_public_source(tmp_path):
+def test_gate_a_public_source(child_scratch):
     application = enabled("CANARY_V3_SLICE6F_SOURCE")
-    result = invoke("source", tmp_path, application)
+    result = invoke("source", child_scratch, application)
     assert result["source_matches"] and result["negative_cases"] == [
         "harness_identity_mismatch",
         "dirty_worktree",
     ]
 
 
-def test_gate_b_public_controller(tmp_path, request):
+def test_gate_b_public_controller(child_scratch, request):
     application = enabled("CANARY_V3_SLICE6F_CONTROLLER")
     result = invoke(
-        "controller", tmp_path, application, request.getfixturevalue("keys")
+        "controller", child_scratch, application, request.getfixturevalue("child_keys")
     )
     assert (
         result["controller_status"] == "completed"

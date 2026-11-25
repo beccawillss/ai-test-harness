@@ -1,8 +1,8 @@
 # C3b Slice 6f — Offline Integration and Failure Testing
 
-The independent-QA correction record at the end supersedes the initial isolation
-assurance, test identities and final disposition below. Earlier execution records
-are retained as history, not evidence that the original audit met its boundary.
+The PR #37 scratch-root correction record at the end supersedes earlier test
+identities and disposition. Earlier implementation, independent-QA correction and
+publication records remain historical evidence for their identified bytes.
 
 ## Authority and preservation
 
@@ -766,3 +766,170 @@ Successful handoff requires every post-save gate to pass before the final respon
 
 **STOP after verified export. No commit, push, PR, merge, live provider/target/judge/
 Study activity or subsequent-slice work. Await separate publication authority.**
+
+## PR #37 review correction — test-owned child scratch roots
+
+The operator authorised this targeted correction after independent GitHub QA of
+published head d2eb0879576636d154e1312ac79cf3ba70c63a3f, published tree
+3e8188286aca8161e482071f44835a644a1edf45 and sole parent
+fd515f875b51ab33b29fed3b618343f14e080678. The P2 review finding is
+https://github.com/beccawillss/ai-test-harness/pull/37#discussion_r4699231328.
+Only the existing four additions may change. All 234 original baseline files,
+their index entries and the original checkout/application/worktrees remain
+protected. No commit, push, review-thread resolution, merge or auto-merge is
+authorised. This record supersedes historical publication-stage stop text only
+for the expressly authorised local correction and independent QA export.
+
+External correction evidence:
+/private/tmp/canary-slice6f-pr37-correction-20261125-01.
+
+### Reproduction and bounded correction
+
+The published _worker, _inspector and _isolation_worker were invoked in separate
+children under unset, conventional /tmp and approved-wrapper-style TMPDIR
+configurations. Interception at audit installation prevented application work;
+the actual unchanged audit helper tested only disposable synthetic outside-root
+paths. All three entrypoints raised KeyError:'TMPDIR' when unset. All three
+selected / as writable with TMPDIR=/tmp and allowed the disposable outside write.
+All three selected the wrapper's parent and denied that write under the approved
+layout. published-reproduction.json binds nine observations to published bytes.
+No write probe targeted a real protected system or user path.
+
+Inspection found the same ambient-parent assumption in the explicit public gate
+helper. Therefore the correction also necessarily changes the existing application
+test addition; the main integration module remains unchanged. The audit policy
+itself is unchanged. Each process fixture provisions child-scratch/tmp, passes the
+writable root explicitly, and configures TMPDIR/TEMP/TMP and tempfile's child-only
+cache before temporary-file/audited operations. Synthetic signing keys are copied
+into a cleanup-managed directory under that root. Inspector evidence remains an
+explicit read-only root. Negative writes/descriptors target disposable siblings,
+outside the approved writable root. Every child exercises actual temporary-file
+success and outside-write denial after installing the audit.
+
+The existing successful linked lifecycle, consume/execute interruption and
+37-probe isolation regression are additionally parameterised over unset, /tmp
+and wrapper-style ambient TMPDIR. Parent environment changes use monkeypatch
+restoration; child configuration cannot change the parent's tempfile cache.
+Existing relative/absolute/descriptor, SQLite, Git, SSH, credential and network
+policy checks, positive barriers, monotonic deadlines and bounded cleanup remain.
+
+### Frozen test bytes and actual fresh results
+
+Final test-byte freeze, unchanged throughout every authoritative command:
+
+- tests/test_canary_integration_v3.py: 0b6705c44876ca071b752141b92d4902e91fcf527bb1d1f708692be2b0966812 (51,148 bytes).
+- tests/test_canary_integration_v3_application.py: 9be1557a5ec66cd16f4decd636615f97cfa5fb3b90909b400e1e713aeda23af2 (17,298 bytes).
+- tests/test_canary_integration_v3_faults.py: 3dea0f5d238a47c35f39be788e4532a3776b8d4905732fe36224b0910d2bcb04 (48,014 bytes).
+
+| Check | Actual result | Wrapper duration | Ambient TMPDIR |
+| --- | --- | ---: | --- |
+| portability-final | 13 passed, 0 skipped | 51.392s | unset |
+| core-final | 52 passed, 0 skipped | 167.109s | unset |
+| source-final | 1 passed, 0 skipped | 2.625s | unset |
+| controller-final | 1 passed, 0 skipped | 17.999s | unset |
+| source-system-final | 1 passed, 0 skipped | 3.064s | system |
+| controller-system-final | 1 passed, 0 skipped | 23.615s | system |
+| source-wrapper-final | 1 passed, 0 skipped | 3.642s | wrapper |
+| controller-wrapper-final | 1 passed, 0 skipped | 23.306s | wrapper |
+| sdk-final | 28 passed, 0 skipped | 26.324s | unset |
+| envelope-serial-final | 1 passed, 0 skipped | 6.664s | unset |
+| regression-serial-final | 2077 passed, 1 skipped | 667.578s | unset |
+| full-final | 4880 passed, 8 skipped | 1029.580s | unset |
+
+All 32 approved scenario groups pass. The 52-test core retains all original 44
+cases and adds eight parameterised portability cases: consume/completed
+interruption (2 to 6), complete isolated workflow (1 to 3), and the existing
+37-probe regression (1 to 3). Each probe set has all 37 denials and legitimate
+filesystem/SQLite/Git positives. Fresh inspection remains read-only and snapshot
+identical after explicit write-denial checks. All eleven interruption variants
+(including parameterisation), race barriers and bounded teardown pass.
+
+Both explicit public gates passed independently under all three ambient
+configurations, with actual source verification and actual public pinned
+controller .run(). Child records identify the fixture root and its tmp directory;
+every affected worker/inspector asserts temporary-file success inside that root
+and outside-root write denial. Keys copied into the root are removed by fixture
+teardown, including failure paths. Parent environment patches are restored and
+the parent's tempfile cache is unchanged. No private controller substitution,
+assertion weakening, production/dependency change or ceiling/deadline increase.
+
+Ruff passed (0.070s), mypy passed all 68 source files
+(0.206s), and formatting passed all three test files
+(0.030s). All historical definition, dataset,
+rubric and pinned fixture identities passed. Both locked runtime inventories are
+byte-identical to the approved inventories: harness CPython 3.12.13 and application
+CPython 3.13.15 with pinned OpenAI 3.3.1. No dependencies were installed.
+
+The only full-suite exclusion remains tests/test_canary_controller.py. The eight
+optional skips are the same historical controller_v3_application,
+instrumentation_v3_sdk, canary_sdk, selection_state, canary_state and runtime_v3
+pinned-worker opt-ins, plus the two default-disabled Slice 6f gates. Both new gates
+and the SDK modules passed separately with explicit opt-ins in the pinned runtime.
+The component skip is the historical runtime_v3 complete-source-worker opt-in.
+These unexecuted historical opt-ins are not reported as passing.
+
+### Retained failed attempt and remaining limitations
+
+The initial component run overlapped the full run and returned 2,076 passed,
+one optional skip and one failure in 697.014s wrapper time. The unchanged
+test_canary_envelope_v3.py::TestInspectionLimits::test_legitimate_bounded_fixtures_fit[maximum]
+raised provider_boundary_stopped_preserve_evidence during dispatch. Its existing
+boundary suppresses the underlying exception, so the cause is not established;
+concurrency/timing is not asserted as the cause. This failure is retained in
+component-initial-failure.json and regression-final command/result/JUnit/log files,
+and is excluded from successful acceptance. No file/assertion/ceiling was changed
+in response. The same fixture subsequently passed within full-final (6.502s),
+in an isolated check (5.975s), and in the complete serial component rerun. The
+successful serial component run and successful full run are the authoritative
+broad verification results for the same frozen final bytes.
+
+The core maximum driver still actually completed 24 calls/72 attempts with 222
+records, 266,235 source bytes, 5,680 envelope bytes, packet/presentation
+22,823/26,495 bytes and a 24,576-byte register DB, in 13.875s. Three isolated
+workflows observed native macOS RSS 79,380,480 / 77,594,624 / 77,512,704 bytes,
+zero pre-probe network events, twelve actual synthetic SSH operations each and
+one denied DNS probe each. These are fixture observations, not hard guarantees.
+All production ceilings, crypto/SQLite timeouts and test deadlines remain unchanged.
+
+The audit policy and deadline/cleanup functions are AST-identical to the published
+versions. All original assert nodes and pytest.raises expectations are retained;
+assertion-preservation.json binds that comparison to final test hashes. Fresh
+collection contains 54 nodes (52 core and two optional gates); all 52 core nodes
+also pass in the full run. scenario-traceability.json covers all 32 groups, and
+portability-isolation-traceability.json binds the three actual probe/workflow
+observations. The external extractor excludes pytest's current-directory symlink
+aliases, so each child is counted once. Every final command/result records the
+frozen test hashes; verification-summary.json binds the evidence hashes.
+
+Trusted imports/fixture/key/local-Git preparation precede audit installation.
+The cooperative audit still trusts Python, OS/tooling and native subprocess
+internals. It establishes neither general native/SQL/subprocess confinement nor
+mandatory admission, external readiness, billing truth, real reviewer identity,
+distributed single use or permission for live inference or Study execution.
+All three existing execution-path and independent-custody limitations remain.
+
+Only three existing additions changed: this plan, the fault module and the explicit
+gate module. The main integration module retains its published bytes. All 234
+original baseline files retain bytes/blobs/modes/index entries; HEAD and the full
+238-file index remain unchanged at the published commit. The original development
+checkout, pinned app and other worktrees are preserved. The accepted qualification
+remains: the first byte inventory was acquired after M0, so subsequent byte/time
+comparisons do not establish a pre-M0 byte comparison.
+
+**Review finding disposition: corrected locally, with passing portability and
+full verification; GO for independent QA of the corrected artifacts.** The review
+thread is left unresolved. The unexplained initial historical-test failure is
+disclosed above for independent assessment. Commit/push/merge remain unauthorised.
+
+### Post-save independent QA artifact gate
+
+After the final plan save, a new external post-save preservation manifest must
+bind all four artifacts, 234 protected baseline blobs/modes/bytes/index entries,
+unchanged published HEAD/index, original checkout and pinned application state.
+Export only the four reviewed additions to
+/Users/rebeccawilliams/Downloads/slice6f-qa-artifacts-pr37-correction.zip, verifying
+archive/member hashes and contents. Retain the prior archives unchanged.
+
+STOP before committing or pushing. Await independent corrected-artifact QA and
+separate follow-up commit authority. No review-thread resolution, merge, live
+provider/target/judge/Study work or subsequent architecture work is authorised.

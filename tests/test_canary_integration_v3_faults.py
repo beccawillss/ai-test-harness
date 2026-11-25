@@ -6,11 +6,13 @@ import fcntl
 import json
 import multiprocessing
 import os
+import shutil
 import signal
 import sqlite3
 import stat
 import sys
 import sysconfig
+import tempfile
 import threading
 from contextlib import suppress
 from importlib.util import source_from_cache
@@ -24,6 +26,76 @@ import test_canary_integration_v3 as c
 
 keys = c.keys
 _TEST_DEADLINE = None
+
+
+@pytest.fixture
+def child_scratch(tmp_path):
+    root = tmp_path / "child-scratch"
+    root.mkdir(mode=0o700)
+    (root / "tmp").mkdir(mode=0o700)
+    return root
+
+
+@pytest.fixture
+def child_keys(child_scratch, keys):
+    # Signing runs under the same narrow writable root as the child workflow.
+    # Remove copied synthetic private keys even when a process test fails.
+    with tempfile.TemporaryDirectory(dir=child_scratch, prefix="signing-") as name:
+        directory = Path(name)
+        for key in (keys.primary, keys.unknown):
+            shutil.copyfile(key, directory / key.name)
+            (directory / key.name).chmod(0o600)
+        yield type(keys)(
+            directory,
+            directory / keys.primary.name,
+            directory / keys.unknown.name,
+            keys.public_key,
+            keys.unknown_public_key,
+        )
+    assert not directory.exists()
+
+
+@pytest.fixture(params=("unset", "system", "wrapper"))
+def ambient_tmpdir(request, tmp_path, monkeypatch):
+    # Only this parent's environment is patched and restored by pytest. Child
+    # tempfile configuration must not alter the parent's cached tempfile state.
+    cached = tempfile.tempdir
+    if request.param == "unset":
+        monkeypatch.delenv("TMPDIR", raising=False)
+    elif request.param == "system":
+        monkeypatch.setenv("TMPDIR", "/tmp")
+    else:
+        wrapper = tmp_path / "ambient-wrapper" / "tmp"
+        wrapper.mkdir(parents=True, mode=0o700)
+        monkeypatch.setenv("TMPDIR", str(wrapper))
+    yield request.param
+    assert tempfile.tempdir == cached
+
+
+def configure_child_scratch(writable):
+    """Called only in fresh children, before audited/temporary-file operations."""
+    writable = Path(writable)
+    assert writable.is_absolute() and writable.resolve() == writable
+    assert writable.is_dir() and (writable / "tmp").is_dir()
+    temporary = str(writable / "tmp")
+    for name in ("TMPDIR", "TEMP", "TMP"):
+        os.environ[name] = temporary
+    tempfile.tempdir = temporary
+    return writable
+
+
+def check_child_scratch(writable):
+    """Exercise the actual audited boundary before a child's public operation."""
+    temporary = writable / "tmp"
+    assert Path(tempfile.gettempdir()) == temporary
+    assert all(os.environ[name] == str(temporary) for name in ("TMPDIR", "TEMP", "TMP"))
+    with tempfile.TemporaryDirectory(prefix="scratch-check-") as name:
+        assert Path(name).parent == temporary
+        (Path(name) / "permitted").write_text("synthetic")
+    outside = writable.parent / "forbidden-child-write"
+    with pytest.raises(AssertionError, match="^synthetic write boundary$"):
+        outside.write_text("forbidden")
+    assert not outside.exists()
 
 
 @pytest.fixture(autouse=True)
@@ -371,9 +443,12 @@ def isolation(
     return observations
 
 
-def _worker(pipe, operation, data, phase):
+def _worker(pipe, writable, operation, data, phase):
+    writable = configure_child_scratch(writable)
     flow = unpack(data)
-    isolation(Path(os.environ["TMPDIR"]).parents[0])
+    assert flow.root.is_relative_to(writable)
+    isolation(writable)
+    check_child_scratch(writable)
     pipe.send(("ready", operation))
     assert pipe.recv() == "go"
 
@@ -479,10 +554,14 @@ def _worker(pipe, operation, data, phase):
     pipe.close()
 
 
-def _inspector(pipe, operation, data):
+def _inspector(pipe, writable, operation, data):
+    writable = configure_child_scratch(writable)
     flow = unpack(data)
-    isolation(Path(os.environ["TMPDIR"]).parent, readonly_root=flow.root)
+    isolation(writable, readonly_root=flow.root)
+    check_child_scratch(writable)
     before = c.snapshot(flow.root)
+    with pytest.raises(AssertionError, match="^synthetic write boundary$"):
+        (flow.root / "forbidden-inspection-write").write_text("forbidden")
     if operation == "authority":
         observed = c.authority.inspect_consumption(
             flow.store, flow.proposal.authorisation_id
@@ -533,11 +612,11 @@ def _inspector(pipe, operation, data):
     pipe.close()
 
 
-def start(target, args, *, total=90):
+def start(target, args, *, writable, total=90):
     deadline = min(_TEST_DEADLINE or float("inf"), monotonic() + total)
     context = multiprocessing.get_context("spawn")
     parent, child = context.Pipe()
-    process = context.Process(target=target, args=(child, *args))
+    process = context.Process(target=target, args=(child, str(writable), *args))
     process.start()
     child.close()
     return SimpleNamespace(process=process, pipe=parent, deadline=deadline)
@@ -573,8 +652,8 @@ def kill(worker):
     finish(worker, killed=True)
 
 
-def inspect_fresh(flow, operation):
-    worker = start(_inspector, (operation, pack(flow)))
+def inspect_fresh(flow, operation, *, writable):
+    worker = start(_inspector, (operation, pack(flow)), writable=writable)
     try:
         result = receive(worker)
     finally:
@@ -588,16 +667,17 @@ def store_ready(root, keys):
     return flow
 
 
+@pytest.mark.usefixtures("ambient_tmpdir")
 @pytest.mark.parametrize("boundary", ["consumed", "completed"])
-def test_cross_stage_kill_after_success(tmp_path, keys, boundary):
+def test_cross_stage_kill_after_success(tmp_path, child_scratch, keys, boundary):
     """P0-12/13: actual public operation returned before the handoff kill."""
     flow = (
-        store_ready(tmp_path / "a", keys)
+        store_ready(child_scratch / "a", keys)
         if boundary == "consumed"
-        else c.consume(c.prepare(tmp_path / "a", keys))
+        else c.consume(c.prepare(child_scratch / "a", keys))
     )
     operation = "consume" if boundary == "consumed" else "execute"
-    worker = start(_worker, (operation, pack(flow), boundary))
+    worker = start(_worker, (operation, pack(flow), boundary), writable=child_scratch)
     try:
         assert receive(worker) == ("ready", operation)
         worker.pipe.send("go")
@@ -619,7 +699,11 @@ def test_cross_stage_kill_after_success(tmp_path, keys, boundary):
             worker.process.kill()
             worker.process.join(5)
     before = c.snapshot(flow.root)
-    result = inspect_fresh(flow, "authority" if boundary == "consumed" else "journal")
+    result = inspect_fresh(
+        flow,
+        "authority" if boundary == "consumed" else "journal",
+        writable=child_scratch,
+    )
     assert result["status"] == ("consumed" if boundary == "consumed" else "completed")
     assert c.snapshot(flow.root) == before
     if boundary == "completed":
@@ -628,9 +712,9 @@ def test_cross_stage_kill_after_success(tmp_path, keys, boundary):
 
 
 @pytest.mark.parametrize("phase", ["pending", "final"])
-def test_envelope_publisher_process_interruption(tmp_path, keys, phase):
+def test_envelope_publisher_process_interruption(tmp_path, child_scratch, keys, phase):
     """P0-14: preserve partial layout and independent prepublication anchor."""
-    flow = c.consume(c.prepare(tmp_path / "a", keys))
+    flow = c.consume(c.prepare(child_scratch / "a", keys))
     c.execute(flow)
     c.anchor(flow)
     root = flow.root / "envelopes"
@@ -644,7 +728,7 @@ def test_envelope_publisher_process_interruption(tmp_path, keys, phase):
         c.snapshot(flow.store.configuration.store_path),
         c.snapshot(flow.registry.path),
     )
-    worker = start(_worker, ("publish", pack(flow), phase))
+    worker = start(_worker, ("publish", pack(flow), phase), writable=child_scratch)
     try:
         assert receive(worker) == ("ready", "publish")
         worker.pipe.send("go")
@@ -658,7 +742,7 @@ def test_envelope_publisher_process_interruption(tmp_path, keys, phase):
         if worker.process.is_alive():
             worker.process.kill()
             worker.process.join(5)
-    observed = inspect_fresh(flow, "envelope")
+    observed = inspect_fresh(flow, "envelope", writable=child_scratch)
     if phase == "pending":
         assert observed == {"error": "artifact_unavailable"}
     else:
@@ -685,13 +769,13 @@ def test_envelope_publisher_process_interruption(tmp_path, keys, phase):
     (tmp_path / "observation.json").write_text(json.dumps(observed, indent=2))
 
 
-def test_review_committed_but_return_uncertain(tmp_path, keys):
+def test_review_committed_but_return_uncertain(tmp_path, child_scratch, keys):
     """P0-16: genuine COMMIT and sync evidence, no checkpoint adoption."""
-    flow = c.complete(tmp_path / "a", keys, register_now=False)
+    flow = c.complete(child_scratch / "a", keys, register_now=False)
     retained = flow.checkpoint.model_dump_json()
     data = pack(flow)
     data["review_signed"] = c.review_bytes(flow)
-    worker = start(_worker, ("review", data, "after_sync"))
+    worker = start(_worker, ("review", data, "after_sync"), writable=child_scratch)
     try:
         assert receive(worker) == ("ready", "review")
         worker.pipe.send("go")
@@ -707,7 +791,7 @@ def test_review_committed_but_return_uncertain(tmp_path, keys):
         if worker.process.is_alive():
             worker.process.kill()
             worker.process.join(5)
-    observed = inspect_fresh(flow, "review")
+    observed = inspect_fresh(flow, "review", writable=child_scratch)
     assert (
         observed["events"] == 1
         and observed["state"] == "RECORDED"
@@ -723,10 +807,10 @@ def test_review_committed_but_return_uncertain(tmp_path, keys):
 
 
 @pytest.mark.parametrize("phase", ["before_commit", "after_commit"])
-def test_authority_transaction_interruption(tmp_path, keys, phase):
+def test_authority_transaction_interruption(tmp_path, child_scratch, keys, phase):
     """P1-03: no successful execution may follow uncertain consumption."""
-    flow = store_ready(tmp_path / "a", keys)
-    worker = start(_worker, ("consume", pack(flow), phase))
+    flow = store_ready(child_scratch / "a", keys)
+    worker = start(_worker, ("consume", pack(flow), phase), writable=child_scratch)
     try:
         assert receive(worker) == ("ready", "consume")
         worker.pipe.send("go")
@@ -740,7 +824,7 @@ def test_authority_transaction_interruption(tmp_path, keys, phase):
         if worker.process.is_alive():
             worker.process.kill()
             worker.process.join(5)
-    observed = inspect_fresh(flow, "authority")
+    observed = inspect_fresh(flow, "authority", writable=child_scratch)
     if phase == "after_commit":
         assert (
             observed["status"] == "consumed"
@@ -767,11 +851,14 @@ def test_authority_transaction_interruption(tmp_path, keys, phase):
     (tmp_path / "observation.json").write_text(json.dumps(observed, indent=2))
 
 
-def test_two_process_consumption_no_retry(tmp_path, keys):
+def test_two_process_consumption_no_retry(tmp_path, child_scratch, keys):
     """P1-02: both contenders start from ready, each calls consumption once."""
-    flow = store_ready(tmp_path / "a", keys)
+    flow = store_ready(child_scratch / "a", keys)
     workers = [
-        start(_worker, ("consume", pack(flow), "race"), total=120) for _ in range(2)
+        start(
+            _worker, ("consume", pack(flow), "race"), writable=child_scratch, total=120
+        )
+        for _ in range(2)
     ]
     try:
         for worker in workers:
@@ -792,7 +879,7 @@ def test_two_process_consumption_no_retry(tmp_path, keys):
                 worker.process.join(5)
             with suppress(OSError):
                 worker.pipe.close()
-    observed = inspect_fresh(flow, "authority")
+    observed = inspect_fresh(flow, "authority", writable=child_scratch)
     assert observed["status"] == "consumed" and not observed["issues"]
     assert not (flow.root / "journal").exists()
 
@@ -835,21 +922,22 @@ def test_publication_failure_preserves_stages(tmp_path, keys, monkeypatch):
     )
 
 
-def _isolation_worker(pipe, root, keys):
+def _isolation_worker(pipe, writable, root, keys):
     import socket
-    import tempfile
 
-    writable = Path(os.environ["TMPDIR"]).parent
+    writable = configure_child_scratch(writable)
+    root = Path(root)
+    assert not root.is_relative_to(writable) and writable.is_relative_to(root)
     # Trusted preparation opens only a disposable probe directory before the audit.
-    descriptor = os.open(writable.parent, os.O_RDONLY | os.O_DIRECTORY)
+    descriptor = os.open(root, os.O_RDONLY | os.O_DIRECTORY)
     observations = isolation(writable, signing_keys=(keys.primary, keys.unknown))
-    tempfile.tempdir = str(writable / "tmp")
-    flow = c.complete(Path(root) / "a", keys)
+    check_child_scratch(writable)
+    flow = c.complete(writable / "a", keys)
     result = c.assess_review(flow)
     assert result.assessment.status == "PASS" and observations["network"] == 0
     assert observations["subprocesses"] > 0
     # Deliberate negative probes must be stopped before an external effect.
-    outside = Path("/private/tmp") / ("slice6f-forbidden-" + os.path.basename(root))
+    outside = root / "slice6f-forbidden-write"
     try:
         outside.write_text("forbidden")
     except AssertionError as error:
@@ -870,38 +958,53 @@ def _isolation_worker(pipe, root, keys):
     with pytest.raises(AssertionError, match="Internet and DNS forbidden"):
         socket.getaddrinfo("canary.invalid", 443)
     with pytest.raises(AssertionError, match="credential path discovery forbidden"):
-        (Path(root) / ".ssh" / "synthetic-only").read_bytes()
+        (writable / ".ssh" / "synthetic-only").read_bytes()
     pipe.send(
         {
             "assessment": "PASS",
             "before_probes_network": 0,
             "blocked_network_probes": observations["network"],
             "subprocesses": observations["subprocesses"],
+            "writable": str(writable),
+            "temporary": tempfile.gettempdir(),
             "measurement": c.measurement(flow),
         }
     )
     pipe.close()
 
 
-def test_complete_workflow_isolation_in_fresh_process(tmp_path, keys):
-    worker = start(_isolation_worker, (str(tmp_path), keys), total=120)
+@pytest.mark.usefixtures("ambient_tmpdir")
+def test_complete_workflow_isolation_in_fresh_process(
+    tmp_path, child_scratch, child_keys
+):
+    worker = start(
+        _isolation_worker,
+        (str(tmp_path), child_keys),
+        writable=child_scratch,
+        total=120,
+    )
     try:
         result = receive(worker)
     finally:
         finish(worker)
     assert result["assessment"] == "PASS" and result["blocked_network_probes"] == 1
+    assert result["writable"] == str(child_scratch)
+    assert result["temporary"] == str(child_scratch / "tmp")
+    assert not (tmp_path / "slice6f-forbidden-write").exists()
+    assert not (tmp_path / "slice6f-forbidden-dirfd").exists()
     (tmp_path / "isolation.json").write_text(json.dumps(result, indent=2))
 
 
-def _isolation_regression_worker(pipe, root):
+def _isolation_regression_worker(pipe, writable, root):
     """Disposable stand-ins only; no credential or private-history discovery."""
     import subprocess
 
     from test_canary_integration_v3_application import local_git, source_copy
 
+    writable = configure_child_scratch(writable)
     root = Path(root)
-    writable, outside = root / "allowed", root / "outside"
-    writable.mkdir()
+    outside = root / "outside"
+    assert not outside.is_relative_to(writable)
     outside.mkdir()
     readonly = writable / "inspection"
     readonly.mkdir()
@@ -926,6 +1029,7 @@ def _isolation_regression_worker(pipe, root):
     # All directories, sentinels, descriptors, Git fixture and imports above are
     # trusted preparation. Every positive/negative operation below is audited.
     observations = isolation(writable, readonly_root=readonly, git_roots=(source,))
+    check_child_scratch(writable)
     checks = []
 
     def denied(name, action, message="boundary|forbidden|unsupported|unreviewed"):
@@ -1154,9 +1258,15 @@ def _isolation_regression_worker(pipe, root):
     pipe.close()
 
 
-def test_isolation_regression_probes_in_fresh_process(tmp_path):
+@pytest.mark.usefixtures("ambient_tmpdir")
+def test_isolation_regression_probes_in_fresh_process(tmp_path, child_scratch):
     """QA correction: real Python/SQLite operations and Git audit-only denials."""
-    worker = start(_isolation_regression_worker, (str(tmp_path),), total=120)
+    worker = start(
+        _isolation_regression_worker,
+        (str(tmp_path),),
+        writable=child_scratch,
+        total=120,
+    )
     try:
         result = receive(worker)
     finally:
