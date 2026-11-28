@@ -422,11 +422,16 @@ never inspect live targets, provider clients or raw response objects.
 
 ## Run the complete offline example
 
+From the checkout root, use the local `.venv` prepared with
+[locked development setup](../README.md#development):
+
 ```sh
-.venv/bin/python examples/taxonomy_suites.py --output-dir /tmp/harness-taxonomy-example
+PYTHONPATH=src .venv/bin/python examples/taxonomy_suites.py --output-dir /path/to/fresh/output
 ```
 
-Choose a fresh explicit output directory. The example refuses to overwrite
+Replace the placeholder with a fresh explicit output directory. Temporary output
+is disposable; use private durable storage for evidence you intend to retain,
+following [AGENTS.md](../AGENTS.md). The example refuses to overwrite
 existing outputs and does nothing on import. It reads synthetic data from
 `examples/data/taxonomy/`, previews four cases, runs two attempts through
 in-memory fakes, saves/reloads both runs, then groups and compares saved evidence.

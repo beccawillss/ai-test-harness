@@ -2,11 +2,15 @@
 
 Python eval orchestration harness. src layout, package name `harness`.
 
+Follow [AGENTS.md](AGENTS.md), the primary development instructions, including
+planning, testing, independent QA, human approval, security and scientific rules.
+
 # Commands
-- Run tests: `uv run pytest -v` (prefer single test files while iterating)
-- Lint/format: `uv run ruff check .` and `uv run ruff format .`
-- Type check: `uv run mypy src/`
-- Always use `uv run` / `uv add` — never pip or plain python
+
+Use the checkout's local `.venv` from the repository root. See
+[development setup and checks](README.md#development) for locked provisioning,
+`PYTHONPATH=src` and test/lint/type-check commands. Prefer focused test files while
+iterating; format only files relevant to the change.
 
 # Architecture rules
 - Core (`harness/core`) must stay dependency-free: no provider SDKs,
@@ -17,7 +21,6 @@ Python eval orchestration harness. src layout, package name `harness`.
 - Quality failures return low Scores; only infrastructure problems raise.
 
 # Workflow
-- Branch per feature (feat/<name>), PR into main. Never commit to main.
-- Every code change lands with tests. Run pytest and show output before
-  claiming done.
-- Significant design decisions get a one-page ADR in docs/adr/.
+
+Use ordinary feature branches and the review process in AGENTS.md. Record
+significant design decisions concisely in the existing `docs/adr/` when useful.
