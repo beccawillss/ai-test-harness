@@ -5,25 +5,14 @@ supplied authority manifest. This example reads local JSON and prints a report;
 it constructs no target or judge, uses no credentials or paid service, and has no
 live mode. It does not open result stores or change saved inputs or Study v1.
 
-Use Python 3.12 or newer with the project's installed dependency
-`pydantic>=2.13.4`. Activate the existing project virtual environment so `python`
-resolves to that interpreter; a bare system Python may lack the dependency.
-No provider SDK or optional live-service dependency is needed for this CLI.
-
-For this isolated worktree, reuse the original checkout's environment:
-
-```sh
-source /Users/rebeccawilliams/Developer/ai-test-harness/.venv/bin/activate
-cd /private/tmp/ai-test-harness-grounding-m3
-```
-
-Run both examples below from the worktree root in that activated shell.
-`PYTHONPATH=src` selects this worktree's code even if the environment has an
-editable install pointing to another checkout. Alternatively, replace `python`
-with the absolute path to that environment's `bin/python`.
+Use this checkout's local `.venv`, provisioned using the committed lockfile as
+described in [development setup](../README.md#development). No provider SDK or
+optional live-service dependency is needed for this CLI. Run both examples from
+the checkout root; `PYTHONPATH=src` selects its source without installing the
+project or borrowing another environment.
 
 ```sh
-PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src python examples/salesagent_grounding.py \
+PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src .venv/bin/python examples/salesagent_grounding.py \
   --response /path/to/response.json \
   --context /path/to/context.json \
   --authority /path/to/authority.json
@@ -60,12 +49,13 @@ Example context for a real saved response:
 ```
 
 For an offline synthetic smoke run, extract copies from frozen fixture S01 into
-a fresh temporary directory. This leaves the corpus unchanged and does not
-create production authority or use expected labels:
+a fresh disposable scratch directory. Retain any important QA evidence in private
+durable storage before cleanup, following [AGENTS.md](../AGENTS.md). This leaves
+the corpus unchanged and does not create production authority or use expected labels:
 
 ```sh
 demo_dir=$(mktemp -d)
-python - "$demo_dir" <<'PY'
+.venv/bin/python - "$demo_dir" <<'PY'
 import json
 import sys
 from pathlib import Path
@@ -78,7 +68,7 @@ for name in ("response", "context", "authority"):
         json.dumps(data[name], ensure_ascii=False), encoding="utf-8"
     )
 PY
-PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src python examples/salesagent_grounding.py \
+PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src .venv/bin/python examples/salesagent_grounding.py \
   --response "$demo_dir/response.json" \
   --context "$demo_dir/context.json" \
   --authority "$demo_dir/authority.json"
